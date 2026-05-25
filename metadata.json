@@ -1,0 +1,6 @@
+{
+  "name": "Daily Catholic Meditations",
+  "description": "Daily Catholic Meditations and Lectio Divina guides with a personal spiritual diary.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
