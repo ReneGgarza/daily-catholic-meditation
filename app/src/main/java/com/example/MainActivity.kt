@@ -2,10 +2,16 @@ package com.example
 
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.foundation.Canvas
@@ -168,6 +174,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
     var formTopic by remember { mutableStateOf("Oración Diaria") }
     var formMood by remember { mutableStateOf("Paz") }
     var formScore by remember { mutableStateOf(4) }
+    var showSpeechDialog by remember { mutableStateOf(false) }
 
     // Observe state from ViewModel
     val diaryEntries by viewModel.diaryState.collectAsState()
@@ -179,6 +186,13 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
     val reminderHour by viewModel.reminderHour.collectAsState()
     val reminderMinute by viewModel.reminderMinute.collectAsState()
     val feedbackMessage by viewModel.feedbackMessage.collectAsState()
+
+    // Profile state values compiled reactively
+    val profileName by viewModel.profileName.collectAsState()
+    val profileVocation by viewModel.profileVocation.collectAsState()
+    val profileAvatarUrl by viewModel.profileAvatarUrl.collectAsState()
+    val profileAvatarType by viewModel.profileAvatarType.collectAsState()
+    var showProfileDialog by remember { mutableStateOf(false) }
 
     // Randomize daily Bible verse
     val dailyVerse = remember { CatholicContent.dailyVerses.random() }
@@ -257,24 +271,13 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
                             )
                         }
 
-                        // My Diary Shortcut Box
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.tertiary)
-                                .clickable {
-                                    currentTab = 1 // Quick switch to Mi Diario Tab
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AccountCircle,
-                                contentDescription = "Perfil Diario",
-                                tint = MaterialTheme.colorScheme.onSecondary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                        // Edit Spiritual Profile Trigger
+                        ProfileBubble(
+                            avatarUrl = profileAvatarUrl,
+                            avatarType = profileAvatarType,
+                            name = profileName,
+                            onClick = { showProfileDialog = true }
+                        )
                     }
                 }
             }
@@ -311,7 +314,19 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
                 NavigationBarItem(
                     selected = currentTab == 2,
                     onClick = { currentTab = 2 },
-                    icon = { Icon(Icons.Default.Settings, contentDescription = "Ajustes") },
+                    icon = { Icon(Icons.Default.Share, contentDescription = "Comunidad") },
+                    label = { Text("Comunidad") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        unselectedIconColor = MaterialTheme.colorScheme.secondary,
+                        indicatorColor = MaterialTheme.colorScheme.tertiary
+                    ),
+                    modifier = Modifier.testTag("tab_community")
+                )
+                NavigationBarItem(
+                    selected = currentTab == 3,
+                    onClick = { currentTab = 3 },
+                    icon = { Icon(Icons.Default.Settings, contentDescription = "Paz") },
                     label = { Text("Paz") },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -323,6 +338,30 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
             }
         }
     ) { innerPadding ->
+        if (showProfileDialog) {
+            EditProfileDialog(
+                initialName = profileName,
+                initialVocation = profileVocation,
+                initialAvatarUrl = profileAvatarUrl,
+                initialAvatarType = profileAvatarType,
+                onDismiss = { showProfileDialog = false },
+                onSave = { n, v, u, t ->
+                    viewModel.updateProfile(n, v, u, t)
+                    showProfileDialog = false
+                }
+            )
+        }
+
+        if (showSpeechDialog) {
+            SpiritualSpeechDialog(
+                onDismiss = { showSpeechDialog = false },
+                onResult = { result ->
+                    formContent = (if (formContent.isNotEmpty()) "$formContent\n" else "") + result
+                    showSpeechDialog = false
+                }
+            )
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -359,9 +398,15 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
                     formMood = formMood,
                     onMoodChange = { formMood = it },
                     formScore = formScore,
-                    onScoreChange = { formScore = it }
+                    onScoreChange = { formScore = it },
+                    onTriggerSpeech = { showSpeechDialog = true }
                 )
-                2 -> PeaceAndSettingsScreen(
+                2 -> CommunityScreen(
+                    viewModel = viewModel,
+                    isPremium = isPremium,
+                    onNavigateToPremium = { currentTab = 3 }
+                )
+                3 -> PeaceAndSettingsScreen(
                     viewModel = viewModel,
                     isPremium = isPremium,
                     reminderEnabled = reminderEnabled,
@@ -389,6 +434,42 @@ fun TodayScreen(
     var selectedPrayerTheme by remember { mutableStateOf("Paz") }
     val prayerThemes = listOf("Paz", "Fortaleza", "Gratitud", "Sanación", "Familia")
     val context = LocalContext.current
+
+    val prayerStreak = remember(diaryEntries) {
+        if (diaryEntries.isEmpty()) {
+            0
+        } else {
+            val entriesByDay = diaryEntries.map { entry ->
+                val calendar = Calendar.getInstance()
+                calendar.timeInMillis = entry.date
+                "${calendar.get(Calendar.YEAR)}-${calendar.get(Calendar.DAY_OF_YEAR)}"
+            }.toSet()
+
+            var streak = 0
+            val calendar = Calendar.getInstance()
+            
+            var currentDayString = "${calendar.get(Calendar.YEAR)}-${calendar.get(Calendar.DAY_OF_YEAR)}"
+            val hasEntryToday = entriesByDay.contains(currentDayString)
+            
+            if (!hasEntryToday) {
+                calendar.add(Calendar.DAY_OF_YEAR, -1)
+                currentDayString = "${calendar.get(Calendar.YEAR)}-${calendar.get(Calendar.DAY_OF_YEAR)}"
+            }
+            
+            if (entriesByDay.contains(currentDayString)) {
+                while (true) {
+                    val checkDayString = "${calendar.get(Calendar.YEAR)}-${calendar.get(Calendar.DAY_OF_YEAR)}"
+                    if (entriesByDay.contains(checkDayString)) {
+                        streak++
+                        calendar.add(Calendar.DAY_OF_YEAR, -1)
+                    } else {
+                        break
+                    }
+                }
+            }
+            streak
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -542,13 +623,13 @@ fun TodayScreen(
                             modifier = Modifier.size(24.dp)
                         )
                         Column {
-                            val displayStreak = if (totalSaved == 0) "12" else "${totalSaved * 2 + 10}"
                             Text(
-                                text = displayStreak,
+                                text = prayerStreak.toString(),
                                 fontSize = 32.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                lineHeight = 36.sp
+                                lineHeight = 36.sp,
+                                modifier = Modifier.testTag("prayer_streak_text")
                             )
                             Text(
                                 text = "Días seguidos",
@@ -775,13 +856,25 @@ fun TodayScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            val clip = android.content.ClipData.newPlainText("Catholic Prayer", currentPrayer)
-                            clipboard.setPrimaryClip(clip)
-                            Toast.makeText(context, "Copiado al portapapeles", Toast.LENGTH_SHORT).show()
-                        }) {
-                            Icon(Icons.Default.Share, contentDescription = "Copiar", tint = MaterialTheme.colorScheme.primary)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            IconButton(onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = android.content.ClipData.newPlainText("Catholic Prayer", currentPrayer)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Copiado al portapapeles", Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = "Copiar", tint = MaterialTheme.colorScheme.primary)
+                            }
+
+                            IconButton(onClick = {
+                                shareText(
+                                    context = context,
+                                    header = "🙏 Oración Católica Inspirada",
+                                    text = currentPrayer
+                                )
+                            }) {
+                                Icon(Icons.Default.Share, contentDescription = "Compartir", tint = MaterialTheme.colorScheme.primary)
+                            }
                         }
 
                         TextButton(onClick = { onCopyToDiary(currentPrayer, "Oración: $selectedPrayerTheme") }) {
@@ -840,6 +933,45 @@ fun TodayScreen(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         modifier = Modifier.padding(horizontal = 12.dp)
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = android.content.ClipData.newPlainText("Versículo del Día", "“${dailyVerse.text}” — ${dailyVerse.reference}")
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Copiado al portapapeles", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Copiar Versículo",
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        IconButton(
+                            onClick = {
+                                shareText(
+                                    context = context,
+                                    header = "📜 Versículo Católico del Día",
+                                    text = "“${dailyVerse.text}”\n\nRef: ${dailyVerse.reference}\n\nContexto: ${dailyVerse.context}"
+                                )
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "Compartir Versículo",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -973,8 +1105,26 @@ fun DiaryScreen(
     formMood: String,
     onMoodChange: (String) -> Unit,
     formScore: Int,
-    onScoreChange: (Int) -> Unit
+    onScoreChange: (Int) -> Unit,
+    onTriggerSpeech: () -> Unit
 ) {
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedMoodFilter by remember { mutableStateOf("Todos") }
+    val filterMoods = listOf("Todos", "Paz", "Gratitud", "Búsqueda", "Fortaleza", "Silencio")
+
+    val filteredEntries = remember(entries, searchQuery, selectedMoodFilter) {
+        entries.filter { entry ->
+            val matchesSearch = entry.title.contains(searchQuery, ignoreCase = true) ||
+                    entry.content.contains(searchQuery, ignoreCase = true) ||
+                    entry.reflectionTopic.contains(searchQuery, ignoreCase = true)
+            
+            val matchesMood = selectedMoodFilter == "Todos" || 
+                    entry.spiritualMood.equals(selectedMoodFilter, ignoreCase = true)
+            
+            matchesSearch && matchesMood
+        }
+    }
+
     val moods = listOf("Paz", "Gratitud", "Búsqueda", "Fortaleza", "Silencio")
 
     LazyColumn(
@@ -1025,13 +1175,29 @@ fun DiaryScreen(
                     label = { Text("¿Qué meditaste o le dijiste al Señor?") },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(110.dp)
+                        .height(125.dp)
                         .testTag("diary_content_input"),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
-                    )
+                    ),
+                    trailingIcon = {
+                        IconButton(
+                            onClick = onTriggerSpeech,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape)
+                                .testTag("diary_mic_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = "Dictar con voz",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -1142,13 +1308,91 @@ fun DiaryScreen(
 
         // Title section
         item {
-            Text(
-                text = "📚 Mis Oraciones Archivadas",
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 8.dp)
-            )
+            Column {
+                Text(
+                    text = "📚 Mis Oraciones Archivadas",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                
+                if (entries.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Search bar - Suggestion 2 (Search and Filter)
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Buscar reflexión, tema o pasaje...") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("diary_search_input"),
+                        singleLine = true,
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Buscar",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Clear,
+                                        contentDescription = "Limpiar"
+                                    )
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(100.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface
+                        )
+                    )
+                    
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    // Horizontal scrollable Filter Chips
+                    androidx.compose.foundation.lazy.LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        items(filterMoods) { mood ->
+                            val isSel = selectedMoodFilter == mood
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(100.dp))
+                                    .background(
+                                        if (isSel) MaterialTheme.colorScheme.primary 
+                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSel) Color.Transparent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                                        shape = RoundedCornerShape(100.dp)
+                                    )
+                                    .clickable { selectedMoodFilter = mood }
+                                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = mood,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // Empty logs state
@@ -1187,9 +1431,44 @@ fun DiaryScreen(
                     }
                 }
             }
+        } else if (filteredEntries.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "No se encontraron resultados",
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "No se encontraron oraciones.",
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                        )
+                        Text(
+                            text = "Intenta modificando tu término de búsqueda o cambiando el filtro seleccionado.",
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(top = 4.dp, start = 8.dp, end = 8.dp)
+                        )
+                    }
+                }
+            }
         }
 
-        items(entries) { entry ->
+        items(filteredEntries) { entry ->
             DiaryListCard(entry = entry, onDelete = { viewModel.deleteDiaryEntry(entry) })
         }
     }
@@ -1560,4 +1839,1043 @@ fun PremiumFeatureRow(text: String) {
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
         )
     }
+}
+
+// ==========================================
+// NEW USER PROFILE & COMMUNITY FEED SCREENS
+// ==========================================
+
+@Composable
+fun ProfileBubble(
+    avatarUrl: String,
+    avatarType: Int,
+    name: String,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.tertiary)
+            .clickable(onClick = onClick)
+            .testTag("top_profile_bubble"),
+        contentAlignment = Alignment.Center
+    ) {
+        if (avatarUrl.isNotEmpty()) {
+            coil.compose.AsyncImage(
+                model = avatarUrl,
+                contentDescription = "Foto de perfil",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+        } else {
+            val (icon, color) = getAvatarIconAndColor(avatarType)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(color.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = "Avatar de fe",
+                    tint = color,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    }
+}
+
+fun getAvatarIconAndColor(type: Int): Pair<androidx.compose.ui.graphics.vector.ImageVector, androidx.compose.ui.graphics.Color> {
+    return when(type) {
+        0 -> Pair(Icons.Default.Star, Color(0xFFE5A11C)) // Estrella divina
+        1 -> Pair(Icons.Default.Favorite, Color(0xFFE91E63)) // Amor mansa
+        2 -> Pair(Icons.Default.Face, Color(0xFF2196F3)) // Rostro de paz
+        3 -> Pair(Icons.Default.Check, Color(0xFF4CAF50)) // Sello justo
+        4 -> Pair(Icons.Default.Home, Color(0xFF9C27B0)) // Hogar sagrado
+        else -> Pair(Icons.Default.AccountCircle, Color(0xFF795548))
+    }
+}
+
+@Composable
+fun EditProfileDialog(
+    initialName: String,
+    initialVocation: String,
+    initialAvatarUrl: String,
+    initialAvatarType: Int,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String, Int) -> Unit
+) {
+    var name by remember { mutableStateOf(initialName) }
+    var vocation by remember { mutableStateOf(initialVocation) }
+    var avatarUrl by remember { mutableStateOf(initialAvatarUrl) }
+    var avatarType by remember { mutableStateOf(initialAvatarType) }
+
+    val vocations = listOf("Laico", "Catequista", "Seminarista", "Religioso/a", "Sacerdote")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "📝 Mi Perfil de Fe",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.primary
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Name Field
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nombre Completo") },
+                    placeholder = { Text("Ej: Juan de la Cruz") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("profile_name_input"),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                // Vocation selector
+                Text("Vocación / Camino:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                androidx.compose.foundation.lazy.LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(vocations) { item ->
+                        val isSelected = vocation == item
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(100.dp))
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                )
+                                .clickable { vocation = item }
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = item,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+
+                // Custom Photo URL field
+                OutlinedTextField(
+                    value = avatarUrl,
+                    onValueChange = { avatarUrl = it },
+                    label = { Text("URL de Fotografía (Opcional)") },
+                    placeholder = { Text("https://ejemplo.com/mifoto.jpg") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("profile_avatar_url_input"),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                // Built-in spiritual Avatars choice
+                Text("O Elige una Insignia Espiritual:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                ) {
+                    repeat(5) { typeIndex ->
+                        val (icon, color) = getAvatarIconAndColor(typeIndex)
+                        val isSelected = avatarType == typeIndex && avatarUrl.isEmpty()
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(color.copy(alpha = 0.15f))
+                                .border(
+                                    width = if (isSelected) 3.dp else 1.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    shape = CircleShape
+                                )
+                                .clickable {
+                                    avatarType = typeIndex
+                                    avatarUrl = "" // prefer built-in
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = "Avatar $typeIndex",
+                                tint = color,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (name.trim().isNotEmpty()) {
+                        onSave(name.trim(), vocation, avatarUrl.trim(), avatarType)
+                    }
+                },
+                shape = RoundedCornerShape(100.dp)
+            ) {
+                Text("Guardar Cambios", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CommunityScreen(
+    viewModel: MainViewModel,
+    isPremium: Boolean,
+    onNavigateToPremium: () -> Unit
+) {
+    val intentions by viewModel.communityIntentions.collectAsState()
+    var selectedCategoryFilter by remember { mutableStateOf("Todos") }
+    var showPostDialog by remember { mutableStateOf(false) }
+
+    val categories = listOf("Todos", "Salud", "Familia", "Acción de Gracias", "Paz", "Conversión")
+
+    if (!isPremium) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+        ) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(32.dp))
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
+                                )
+                            )
+                        )
+                        .border(
+                            width = 1.5.dp,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(32.dp)
+                        )
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Comunidad Global",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "⛪ Comunión de Oración Global",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "La oración compartida une corazones. Conéctate con seminaristas, laicos y religiosos de todo el mundo en el feed universal de intenciones de fe.",
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            PremiumBenefitRow(icon = Icons.Default.Add, text = "Comparte tus intenciones personales con fieles devotos.")
+                            PremiumBenefitRow(icon = Icons.Default.Favorite, text = "Reacciona con un 'Amén' y comprométete a rezar.")
+                            PremiumBenefitRow(icon = Icons.Default.Star, text = "Enciende una luz de auxilio en plegaria por tus hermanos.")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Button(
+                        onClick = onNavigateToPremium,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .testTag("unlock_community_button"),
+                        shape = RoundedCornerShape(100.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text(
+                            text = "⭐️ Activar Suscripción Premium",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+            }
+        }
+    } else {
+        val filteredIntentions = remember(intentions, selectedCategoryFilter) {
+            if (selectedCategoryFilter == "Todos") {
+                intentions
+            } else {
+                intentions.filter { it.category.equals(selectedCategoryFilter, ignoreCase = true) }
+            }
+        }
+
+        val context = LocalContext.current
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
+        ) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Categories list filter
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            ) {
+                items(categories) { cat ->
+                    val isSel = selectedCategoryFilter == cat
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(100.dp))
+                            .background(
+                                if (isSel) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (isSel) Color.Transparent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(100.dp)
+                            )
+                            .clickable { selectedCategoryFilter = cat }
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = cat,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showPostDialog = true }
+                            .testTag("post_intention_card"),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)),
+                        shape = RoundedCornerShape(20.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Escribir",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "🙏 ¿Tienes una intención de oración?",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "Toca aquí para compartirla con tus hermanos de fe.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (filteredIntentions.isEmpty()) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            shape = RoundedCornerShape(24.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Vacío",
+                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Aún no hay intenciones aquí.",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    text = "¡Comparte tu intención y abre este espacio espiritual!",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    items(filteredIntentions, key = { it.id }) { item ->
+                        CommunityIntentionCard(
+                            item = item,
+                            onAmen = { viewModel.toggleAmen(item.id) },
+                            onPray = { viewModel.togglePray(item.id) },
+                            onCopy = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = android.content.ClipData.newPlainText("Intención de Oración", item.content)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Intención de oración copiada", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        if (showPostDialog) {
+            PostIntentionDialog(
+                onDismiss = { showPostDialog = false },
+                onPost = { text, category, isAnon ->
+                    viewModel.postIntention(text, category, isAnon)
+                    showPostDialog = false
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun CommunityIntentionCard(
+    item: com.example.data.CommunityIntention,
+    onAmen: () -> Unit,
+    onPray: () -> Unit,
+    onCopy: () -> Unit
+) {
+    val formattedTime = remember(item.timestamp) {
+        val seconds = (System.currentTimeMillis() - item.timestamp) / 1000
+        when {
+            seconds < 60 -> "Hace un momento"
+            seconds < 3600 -> "Hace ${seconds / 60} min"
+            seconds < 86400 -> "Hace ${seconds / 3600} h"
+            else -> {
+                val sdf = SimpleDateFormat("dd MMM", Locale.getDefault())
+                sdf.format(Date(item.timestamp))
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("community_intention_card"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(24.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (item.avatarUrl.isNotEmpty()) {
+                    coil.compose.AsyncImage(
+                        model = item.avatarUrl,
+                        contentDescription = "Foto",
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), CircleShape),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                } else {
+                    val (icon, color) = getAvatarIconAndColor(item.avatarType)
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(color.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = "Voz de fe",
+                            tint = color,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.userName,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "${item.userVocation} • $formattedTime",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.8f)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(100.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = item.category,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = item.content,
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(100.dp))
+                        .background(if (item.userHasAmened) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent)
+                        .clickable(onClick = onAmen)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = if (item.userHasAmened) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Amén",
+                        tint = if (item.userHasAmened) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Amén (${item.amenCount})",
+                        fontSize = 11.sp,
+                        fontWeight = if (item.userHasAmened) FontWeight.Bold else FontWeight.Normal,
+                        color = if (item.userHasAmened) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(100.dp))
+                        .background(if (item.userHasPrayed) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f) else Color.Transparent)
+                        .clickable(onClick = onPray)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = "Orando",
+                        tint = if (item.userHasPrayed) Color(0xFFE5A93B) else MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Orare (${item.prayCount})",
+                        fontSize = 11.sp,
+                        fontWeight = if (item.userHasPrayed) FontWeight.Bold else FontWeight.Normal,
+                        color = if (item.userHasPrayed) Color(0xFFC4891B) else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                IconButton(
+                    onClick = onCopy,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Copiar",
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PostIntentionDialog(
+    onDismiss: () -> Unit,
+    onPost: (String, String, Boolean) -> Unit
+) {
+    var text by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf("Salud") }
+    var isAnonymous by remember { mutableStateOf(false) }
+
+    val categories = listOf("Salud", "Familia", "Acción de Gracias", "Paz", "Conversión")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "🙏 Compartir Intención",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    placeholder = { Text("Escribe tu petición al Señor aquí. Tus hermanos rezarán contigo...") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(110.dp)
+                        .testTag("intention_text_input"),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Text("Categoría:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                androidx.compose.foundation.lazy.LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(categories) { cat ->
+                        val isSelected = selectedCategory == cat
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(100.dp))
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                )
+                                .clickable { selectedCategory = cat }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = cat,
+                                fontSize = 10.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isAnonymous = !isAnonymous }
+                        .padding(vertical = 4.dp)
+                ) {
+                    Checkbox(
+                        checked = isAnonymous,
+                        onCheckedChange = { isAnonymous = it },
+                        modifier = Modifier.testTag("anonymous_checkbox")
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        "Publicar de manera anónima",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (text.trim().isNotEmpty()) {
+                        onPost(text.trim(), selectedCategory, isAnonymous)
+                    }
+                },
+                shape = RoundedCornerShape(100.dp)
+            ) {
+                Text("Publicar intención", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@Composable
+fun PremiumBenefitRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = "Beneficio",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = text,
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+        )
+    }
+}
+
+fun shareText(context: Context, header: String, text: String) {
+    try {
+        val sendIntent = Intent().apply {
+            action = Intent.ACTION_SEND
+            putExtra(Intent.EXTRA_TITLE, header)
+            putExtra(Intent.EXTRA_TEXT, "$header\n\n$text")
+            type = "text/plain"
+        }
+        val shareIntent = Intent.createChooser(sendIntent, "Compartir con...")
+        shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(shareIntent)
+    } catch (e: Exception) {
+        Toast.makeText(context, "No se pudo abrir el menú para compartir", Toast.LENGTH_SHORT).show()
+    }
+}
+
+@Composable
+fun SpiritualSpeechDialog(
+    onDismiss: () -> Unit,
+    onResult: (String) -> Unit
+) {
+    val context = LocalContext.current
+    var isListening by remember { mutableStateOf(false) }
+    var transcriptionText by remember { mutableStateOf("Toca el botón y cuéntale al Señor tus reflexiones de hoy...") }
+    var speechRecognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
+    
+    val inspirations = listOf(
+        "Gracias Dios mío por este maravilloso día, por la salud y mi familia...",
+        "Padre Celestial, te pido hoy fortaleza para superar mis debilidades...",
+        "Jesús, en ti confío. Ilumina mi camino de fe y dame paz en el corazón...",
+        "Señor, te pido de manera especial por los enfermos y los más necesitados..."
+    )
+
+    DisposableEffect(Unit) {
+        if (SpeechRecognizer.isRecognitionAvailable(context)) {
+            val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+            speechRecognizer = recognizer
+            
+            recognizer.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    isListening = true
+                    transcriptionText = "Escuchando con amor..."
+                }
+
+                override fun onBeginningOfSpeech() {
+                    transcriptionText = "Transcribiendo tu plegaria..."
+                }
+
+                override fun onRmsChanged(rmsdB: Float) {}
+
+                override fun onBufferReceived(buffer: ByteArray?) {}
+
+                override fun onEndOfSpeech() {
+                    isListening = false
+                }
+
+                override fun onError(error: Int) {
+                    isListening = false
+                    val errorMsg = when (error) {
+                        SpeechRecognizer.ERROR_AUDIO -> "Error de audio."
+                        SpeechRecognizer.ERROR_CLIENT -> "Error de servicio."
+                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Faltan permisos de micrófono."
+                        SpeechRecognizer.ERROR_NETWORK -> "Error de red."
+                        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Tiempo agotado."
+                        SpeechRecognizer.ERROR_NO_MATCH -> "No se escuchó voz limpia. Intenta de nuevo."
+                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "El motor está ocupado."
+                        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Silencio prolongado."
+                        else -> "El dictado no está habilitado."
+                    }
+                    transcriptionText = "$errorMsg Elige una inspiración abajo o escribe libremente."
+                }
+
+                override fun onResults(results: Bundle?) {
+                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    val bestMatch = matches?.firstOrNull()
+                    if (!bestMatch.isNullOrBlank()) {
+                        transcriptionText = bestMatch
+                    } else {
+                        transcriptionText = "No logramos entender el audio, intenta de nuevo."
+                    }
+                    isListening = false
+                }
+
+                override fun onPartialResults(partialResults: Bundle?) {
+                    val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    val partial = matches?.firstOrNull()
+                    if (!partial.isNullOrBlank()) {
+                        transcriptionText = partial
+                    }
+                }
+
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+        } else {
+            transcriptionText = "El dictado nativo de voz no está habilitado en este dispositivo.\n\nPuedes seleccionar una inspiración de plegaria a continuación:"
+        }
+
+        onDispose {
+            speechRecognizer?.destroy()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "Microfono",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Text(
+                    text = "Dictado de Plegaria",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(115.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.05f))
+                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                        .padding(12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (isListening) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Red)
+                            )
+                        }
+                        
+                        Text(
+                            text = transcriptionText,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    if (speechRecognizer != null) {
+                        Button(
+                            onClick = {
+                                if (isListening) {
+                                    speechRecognizer?.stopListening()
+                                    isListening = false
+                                } else {
+                                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                        putExtra(Intent.EXTRA_LANGUAGE, "es-ES")
+                                        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                                    }
+                                    try {
+                                        speechRecognizer?.startListening(intent)
+                                        isListening = true
+                                    } catch (e: Exception) {
+                                        transcriptionText = "No se pudo iniciar el dictado nativo."
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(100.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isListening) Color.Red else MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Icon(
+                                imageVector = if (isListening) Icons.Default.Check else Icons.Default.Mic,
+                                contentDescription = "Accion microfono",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isListening) "Detener Escucha" else "Tocar para Hablar",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = "🌱 Inspiraciones del Alma (Toca para usar):",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    inspirations.forEach { textVal ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .clickable {
+                                    transcriptionText = textVal
+                                }
+                                .padding(8.dp)
+                        ) {
+                            Text(
+                                text = textVal,
+                                fontSize = 11.sp,
+                                maxLines = 2,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (transcriptionText.isNotEmpty() && !transcriptionText.startsWith("Toca") && !transcriptionText.startsWith("El dictado")) {
+                        onResult(transcriptionText)
+                    } else {
+                        onDismiss()
+                    }
+                },
+                shape = RoundedCornerShape(100.dp)
+            ) {
+                Text("Insertar en mi Diario", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cerrar")
+            }
+        }
+    )
 }
