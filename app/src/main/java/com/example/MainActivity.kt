@@ -44,10 +44,81 @@ import java.util.*
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Dynamic Crash Interception & Logging
+        val originalHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                val sharedPrefs = getSharedPreferences("daily_catholic_prefs", Context.MODE_PRIVATE)
+                val sw = java.io.StringWriter()
+                val pw = java.io.PrintWriter(sw)
+                throwable.printStackTrace(pw)
+                val stackTraceString = sw.toString()
+                sharedPrefs.edit().putString("last_crash_trace", stackTraceString).commit()
+            } catch (e: Exception) {
+                // Silent catch
+            }
+            originalHandler?.uncaughtException(thread, throwable)
+        }
+
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                MainAppScreen()
+                var crashTrace by remember { mutableStateOf<String?>(null) }
+                
+                // Read and reset the crash log on launch
+                LaunchedEffect(Unit) {
+                    val sharedPrefs = getSharedPreferences("daily_catholic_prefs", Context.MODE_PRIVATE)
+                    val trace = sharedPrefs.getString("last_crash_trace", null)
+                    if (!trace.isNullOrEmpty()) {
+                        crashTrace = trace
+                        // Clear so it doesn't loop forever
+                        sharedPrefs.edit().remove("last_crash_trace").apply()
+                    }
+                }
+
+                Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+                    MainAppScreen()
+
+                    crashTrace?.let { trace ->
+                        AlertDialog(
+                            onDismissRequest = { crashTrace = null },
+                            title = { Text("Recuperación de Caída", fontWeight = FontWeight.Bold) },
+                            text = {
+                                Column {
+                                    Text(
+                                        text = "La aplicación se cerró debido a un problema inesperado. Comparta esta información con soporte para que la corrijamos:",
+                                        fontSize = 12.sp,
+                                        modifier = androidx.compose.ui.Modifier.padding(bottom = 8.dp)
+                                    )
+                                    Box(
+                                        modifier = androidx.compose.ui.Modifier
+                                            .fillMaxWidth()
+                                            .height(200.dp)
+                                            .background(Color.Black.copy(alpha = 0.05f))
+                                            .padding(8.dp)
+                                    ) {
+                                        LazyColumn(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+                                            item {
+                                                Text(
+                                                    text = trace,
+                                                    fontSize = 10.sp,
+                                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                    color = MaterialTheme.colorScheme.error
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { crashTrace = null }) {
+                                    Text("Aceptar")
+                                }
+                            }
+                        )
+                    }
+                }
             }
         }
     }
@@ -58,6 +129,38 @@ class MainActivity : ComponentActivity() {
 fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
     var currentTab by remember { mutableStateOf(0) }
+
+    // Unified Android Post Notifications Permission Launcher
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.toggleReminder(true, viewModel.reminderHour.value, viewModel.reminderMinute.value, context)
+        } else {
+            Toast.makeText(context, "Permiso de notificación denegado", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val onToggleReminderWithPermission: (Boolean, Int, Int) -> Unit = { enabled, h, m ->
+        if (enabled) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                
+                if (hasPermission) {
+                    viewModel.toggleReminder(true, h, m, context)
+                } else {
+                    permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
+            } else {
+                viewModel.toggleReminder(true, h, m, context)
+            }
+        } else {
+            viewModel.toggleReminder(false, h, m, context)
+        }
+    }
 
     // State prefilling for diary integration
     var formTitle by remember { mutableStateOf("") }
@@ -82,8 +185,8 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
 
     // Dynamic Spanish Date for Top Header following Geometric Balance specification
     val todayDateString = remember {
-        val sdf = SimpleDateFormat("EEEE, d MMM", Locale("es", "ES"))
-        sdf.format(Date()).uppercase(Locale("es", "ES"))
+        val sdf = SimpleDateFormat("EEEE, d MMM", Locale.forLanguageTag("es-ES"))
+        sdf.format(Date()).uppercase(Locale.forLanguageTag("es-ES"))
     }
 
     // Handle feedback notifications
@@ -142,7 +245,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
                                 .clickable {
                                     val h = reminderHour
                                     val m = reminderMinute
-                                    viewModel.toggleReminder(!reminderEnabled, h, m, context)
+                                    onToggleReminderWithPermission(!reminderEnabled, h, m)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
@@ -263,7 +366,8 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
                     isPremium = isPremium,
                     reminderEnabled = reminderEnabled,
                     reminderHour = reminderHour,
-                    reminderMinute = reminderMinute
+                    reminderMinute = reminderMinute,
+                    onToggleReminder = onToggleReminderWithPermission
                 )
             }
         }
@@ -566,7 +670,7 @@ fun TodayScreen(
                     }
 
                     Icon(
-                        imageVector = Icons.Default.KeyboardArrowRight,
+                        imageVector = Icons.Default.ArrowForward,
                         contentDescription = "Navegar Premium",
                         tint = textColor,
                         modifier = Modifier.size(18.dp)
@@ -1227,7 +1331,8 @@ fun PeaceAndSettingsScreen(
     isPremium: Boolean,
     reminderEnabled: Boolean,
     reminderHour: Int,
-    reminderMinute: Int
+    reminderMinute: Int,
+    onToggleReminder: (Boolean, Int, Int) -> Unit
 ) {
     val context = LocalContext.current
     var inputHour by remember { mutableStateOf(reminderHour.toString()) }
@@ -1275,7 +1380,7 @@ fun PeaceAndSettingsScreen(
                         onCheckedChange = { checked ->
                             val h = inputHour.toIntOrNull() ?: 8
                             val m = inputMinute.toIntOrNull() ?: 30
-                            viewModel.toggleReminder(checked, h, m, context)
+                            onToggleReminder(checked, h, m)
                         },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = MaterialTheme.colorScheme.primary,
@@ -1324,7 +1429,7 @@ fun PeaceAndSettingsScreen(
                             val m = inputMinute.toIntOrNull()?.coerceIn(0, 59) ?: 30
                             inputHour = h.toString()
                             inputMinute = m.toString()
-                            viewModel.toggleReminder(true, h, m, context)
+                            onToggleReminder(true, h, m)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
