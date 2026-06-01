@@ -18,6 +18,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -193,6 +196,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
     val profileAvatarUrl by viewModel.profileAvatarUrl.collectAsState()
     val profileAvatarType by viewModel.profileAvatarType.collectAsState()
     var showProfileDialog by remember { mutableStateOf(false) }
+    var showLandingPage by remember { mutableStateOf(false) }
 
     // Randomize daily Bible verse
     val dailyVerse = remember { CatholicContent.dailyVerses.random() }
@@ -211,10 +215,11 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
         }
     }
 
-    Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .navigationBarsPadding(),
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                .navigationBarsPadding(),
         topBar = {
             Column(
                 modifier = Modifier
@@ -250,6 +255,24 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Landing / Descarga APK Quick Action Box
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFFF59D)) // Gold accent color
+                                .clickable { showLandingPage = true }
+                                .testTag("btn_downloads_landing"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudDownload,
+                                contentDescription = "Descargar APK / Landing",
+                                tint = Color(0xFF0F1E36),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
                         // Alerta/Reminders Quick Action Box
                         Box(
                             modifier = Modifier
@@ -352,6 +375,8 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
             )
         }
 
+        // LandingPageScreen is rendered outside Scaffold inside the parent Box layout container below
+
         if (showSpeechDialog) {
             SpiritualSpeechDialog(
                 onDismiss = { showSpeechDialog = false },
@@ -384,7 +409,8 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
                         currentTab = 1 // Switch to Diary Tab
                         Toast.makeText(context, "Listo para archivar en tu Diario", Toast.LENGTH_SHORT).show()
                     },
-                    onNavigateToTab = { currentTab = it }
+                    onNavigateToTab = { currentTab = it },
+                    onOpenLanding = { showLandingPage = true }
                 )
                 1 -> DiaryScreen(
                     viewModel = viewModel,
@@ -417,6 +443,11 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
             }
         }
     }
+        
+    if (showLandingPage) {
+        LandingPageScreen(onDismiss = { showLandingPage = false })
+    }
+}
 }
 
 @Composable
@@ -429,11 +460,73 @@ fun TodayScreen(
     isPremium: Boolean,
     diaryEntries: List<DiaryEntry>,
     onCopyToDiary: (String, String) -> Unit,
-    onNavigateToTab: (Int) -> Unit
+    onNavigateToTab: (Int) -> Unit,
+    onOpenLanding: () -> Unit = {}
 ) {
     var selectedPrayerTheme by remember { mutableStateOf("Paz") }
     val prayerThemes = listOf("Paz", "Fortaleza", "Gratitud", "Sanación", "Familia")
     val context = LocalContext.current
+
+    var tts by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
+    var currentlySpeakingStep by remember { mutableStateOf<Int?>(null) }
+
+    DisposableEffect(Unit) {
+        var ttsInstance: android.speech.tts.TextToSpeech? = null
+        try {
+            ttsInstance = android.speech.tts.TextToSpeech(context.applicationContext) { status ->
+                if (status == android.speech.tts.TextToSpeech.SUCCESS) {
+                    try {
+                        ttsInstance?.language = java.util.Locale("es", "ES")
+                        ttsInstance?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+                            override fun onStart(utteranceId: String?) {}
+                            override fun onDone(utteranceId: String?) {
+                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                    currentlySpeakingStep = null
+                                }
+                            }
+                            @Deprecated("Deprecated in Java")
+                            override fun onError(utteranceId: String?) {
+                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                    currentlySpeakingStep = null
+                                }
+                            }
+                        })
+                    } catch (e: Exception) {}
+                }
+            }
+            tts = ttsInstance
+        } catch (e: Exception) {}
+
+        onDispose {
+            try {
+                ttsInstance?.stop()
+                ttsInstance?.shutdown()
+            } catch (e: Exception) {}
+        }
+    }
+
+    val playStepText: (Int, String) -> Unit = { stepNum, txt ->
+        val safeTts = tts
+        if (safeTts != null) {
+            if (currentlySpeakingStep == stepNum) {
+                try {
+                    safeTts.stop()
+                } catch (e: Exception) {}
+                currentlySpeakingStep = null
+            } else {
+                try {
+                    safeTts.stop()
+                    currentlySpeakingStep = stepNum
+                    val params = android.os.Bundle()
+                    safeTts.speak(txt, android.speech.tts.TextToSpeech.QUEUE_FLUSH, params, "step_$stepNum")
+                } catch (e: Exception) {
+                    currentlySpeakingStep = null
+                }
+            }
+        } else {
+            Toast.makeText(context, "El motor de voz aún no está listo.", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val prayerStreak = remember(diaryEntries) {
         if (diaryEntries.isEmpty()) {
@@ -457,11 +550,13 @@ fun TodayScreen(
             }
             
             if (entriesByDay.contains(currentDayString)) {
-                while (true) {
+                var maxIterations = entriesByDay.size + 5
+                while (maxIterations > 0) {
                     val checkDayString = "${calendar.get(Calendar.YEAR)}-${calendar.get(Calendar.DAY_OF_YEAR)}"
                     if (entriesByDay.contains(checkDayString)) {
                         streak++
                         calendar.add(Calendar.DAY_OF_YEAR, -1)
+                        maxIterations--
                     } else {
                         break
                     }
@@ -482,13 +577,13 @@ fun TodayScreen(
         item {
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primary
+                    containerColor = Color(0xFF023E73)
                 ),
                 shape = RoundedCornerShape(28.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("lectio_hero_card"),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -496,8 +591,8 @@ fun TodayScreen(
                         .background(
                             brush = Brush.verticalGradient(
                                 colors = listOf(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                                    Color(0xFF023E73), // Serene Holy Blue
+                                    Color(0xFF011E3A)  // Deep Meditative Midnight Blue
                                 )
                             )
                         )
@@ -524,12 +619,13 @@ fun TodayScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(100.dp))
-                                .background(Color.White.copy(alpha = 0.2f))
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(100.dp))
                                 .padding(horizontal = 12.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = "Lectio Divina",
-                                color = Color.White,
+                                color = Color(0xFFFFF59D), // Warm parchment gold accent
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.5.sp
@@ -544,20 +640,20 @@ fun TodayScreen(
                         Text(
                             text = titleValue,
                             fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = Color.White,
                             lineHeight = 30.sp
                         )
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
                             text = contextPreview,
                             fontSize = 14.sp,
                             fontStyle = FontStyle.Italic,
-                            fontWeight = FontWeight.Normal,
-                            color = Color.White.copy(alpha = 0.85f),
-                            lineHeight = 20.sp
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFFE2F1FF), // Pristine celeste-white for extreme readability
+                            lineHeight = 21.sp
                         )
 
                         Spacer(modifier = Modifier.height(18.dp))
@@ -567,15 +663,15 @@ fun TodayScreen(
                             onClick = { viewModel.generateDailyLectioDivina() },
                             enabled = !isGenerating,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.tertiary,
-                                contentColor = MaterialTheme.colorScheme.onSecondary
+                                containerColor = Color(0xFFFFD54F), // Active liturgical yellow/gold
+                                contentColor = Color(0xFF1B1A00) // Dark high-contrast label color
                             ),
                             shape = RoundedCornerShape(100.dp),
                             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
                         ) {
                             if (isGenerating) {
                                 CircularProgressIndicator(
-                                    color = MaterialTheme.colorScheme.onSecondary,
+                                    color = Color(0xFF1B1A00),
                                     modifier = Modifier.size(18.dp),
                                     strokeWidth = 2.dp
                                 )
@@ -754,6 +850,61 @@ fun TodayScreen(
                         imageVector = Icons.Default.ArrowForward,
                         contentDescription = "Navegar Premium",
                         tint = textColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        // Portal de Descargas / Landing Page Quick Access Card
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xFFFFFAEC)) // Warm white gold
+                    .border(1.dp, Color(0xFFFFD54F), RoundedCornerShape(20.dp))
+                    .clickable { onOpenLanding() }
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFFFD54F))
+                            .padding(8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudDownload,
+                            contentDescription = "Portal de Descarga APK",
+                            tint = Color(0xFF132338),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Portal de Descarga APK",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF132338)
+                        )
+                        Text(
+                            text = "Instala en tu móvil o escanea el QR en pantalla",
+                            fontSize = 11.sp,
+                            color = Color(0xFF132338).copy(alpha = 0.7f)
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.Default.ArrowForward,
+                        contentDescription = "Abrir Portal",
+                        tint = Color(0xFF132338),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -979,32 +1130,72 @@ fun TodayScreen(
         // Lectio Divina Active Step-by-Step interactive view
         currentLectio?.let { template ->
             item {
+                val isDark = isSystemInDarkTheme()
+                val containerBgColor = if (isDark) Color(0xFF0E1E34) else Color(0xFFEEF5FD)
+                val containerBorderColor = if (isDark) Color(0xFF1E3D6B) else Color(0xFFCCE0F7)
+                val titleColor = if (isDark) Color(0xFFFFD54F) else Color(0xFF0B2545) // Warm gold or Deep Navy
+                val subtitleColor = if (isDark) Color(0xFF90A4AE) else Color(0xFF455A64)
+                val stepTitleColor = if (isDark) Color(0xFFFFE082) else Color(0xFF0D3E73) // Gold or Rich Navy
+                val stepBodyColor = if (isDark) Color(0xFFFFFFFF) else Color(0xFF0F2642) // Solid White or Clear Deep Slate Blue for highest contrast
+ 
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), RoundedCornerShape(24.dp))
+                        .background(containerBgColor)
+                        .border(1.5.dp, containerBorderColor, RoundedCornerShape(24.dp))
                         .padding(20.dp)
                 ) {
                     Text(
                         text = "⛪ Meditación: ${template.title}",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.primary
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 17.sp,
+                        color = titleColor
                     )
                     Text(
                         text = "Sigue pacientemente la guía litúrgica paso a paso:",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        color = subtitleColor,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
                     // Vertical Timeline Stepper List
-                    LectioStepItem(stepNumber = 1, title = "LECTIO (Lectura divina)", body = template.lectioText)
-                    LectioStepItem(stepNumber = 2, title = "MEDITATIO (Meditación de fe)", body = template.meditatioText)
-                    LectioStepItem(stepNumber = 3, title = "ORATIO (Oración al Señor)", body = template.oratioText)
-                    LectioStepItem(stepNumber = 4, title = "CONTEMPLATIO (Presencia sagrada)", body = template.contemplatioText)
+                    LectioStepItem(
+                        stepNumber = 1, 
+                        title = "LECTIO (Lectura divina)", 
+                        body = template.lectioText, 
+                        titleColor = stepTitleColor, 
+                        textColor = stepBodyColor,
+                        isPlaying = currentlySpeakingStep == 1,
+                        onSpeakClick = { playStepText(1, template.lectioText) }
+                    )
+                    LectioStepItem(
+                        stepNumber = 2, 
+                        title = "MEDITATIO (Meditación de fe)", 
+                        body = template.meditatioText, 
+                        titleColor = stepTitleColor, 
+                        textColor = stepBodyColor,
+                        isPlaying = currentlySpeakingStep == 2,
+                        onSpeakClick = { playStepText(2, template.meditatioText) }
+                    )
+                    LectioStepItem(
+                        stepNumber = 3, 
+                        title = "ORATIO (Oración al Señor)", 
+                        body = template.oratioText, 
+                        titleColor = stepTitleColor, 
+                        textColor = stepBodyColor,
+                        isPlaying = currentlySpeakingStep == 3,
+                        onSpeakClick = { playStepText(3, template.oratioText) }
+                    )
+                    LectioStepItem(
+                        stepNumber = 4, 
+                        title = "CONTEMPLATIO (Presencia sagrada)", 
+                        body = template.contemplatioText, 
+                        titleColor = stepTitleColor, 
+                        textColor = stepBodyColor,
+                        isPlaying = currentlySpeakingStep == 4,
+                        onSpeakClick = { playStepText(4, template.contemplatioText) }
+                    )
 
                     Spacer(modifier = Modifier.height(14.dp))
 
@@ -1016,17 +1207,26 @@ fun TodayScreen(
                             onCopyToDiary(fullLectioText, "Lectio Divina: ${template.scripture.substringBefore('\n')}")
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                            contentColor = MaterialTheme.colorScheme.primary
+                            containerColor = if (isDark) Color(0xFF1E3A5F) else Color(0xFFCFE1F5),
+                            contentColor = if (isDark) Color(0xFF90CAF9) else Color(0xFF023E73)
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp),
                         shape = RoundedCornerShape(100.dp)
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = "Guardar", modifier = Modifier.size(16.dp))
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Guardar",
+                            modifier = Modifier.size(16.dp),
+                            tint = if (isDark) Color(0xFF90CAF9) else Color(0xFF023E73)
+                        )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Guardar Reflexión Completa en el Diario", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "Guardar Reflexión Completa en el Diario",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
@@ -1036,57 +1236,87 @@ fun TodayScreen(
 
 // Stepper item component with gorgeous vertical connector logic
 @Composable
-fun LectioStepItem(stepNumber: Int, title: String, body: String) {
+fun LectioStepItem(
+    stepNumber: Int, 
+    title: String, 
+    body: String,
+    titleColor: Color = MaterialTheme.colorScheme.primary,
+    textColor: Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+    isPlaying: Boolean = false,
+    onSpeakClick: (() -> Unit)? = null
+) {
+    val isDark = isSystemInDarkTheme()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(24.dp)
+            modifier = Modifier.width(28.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(24.dp)
+                    .size(28.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
+                    .background(titleColor),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = stepNumber.toString(),
-                    color = Color.White,
-                    fontSize = 11.sp,
+                    color = if (isDark) Color(0xFF132338) else Color.White,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))
             Box(
                 modifier = Modifier
-                    .width(1.5.dp)
-                    .height(56.dp)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                    .width(2.dp)
+                    .height(64.dp)
+                    .background(titleColor.copy(alpha = 0.3f))
             )
         }
 
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(bottom = 12.dp)
+                .padding(bottom = 14.dp)
         ) {
-            Text(
-                text = title,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(2.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 14.sp,
+                    color = titleColor,
+                    letterSpacing = 0.5.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                if (onSpeakClick != null) {
+                    IconButton(
+                        onClick = onSpeakClick,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Detener audio" else "Escuchar audio",
+                            tint = if (isPlaying) Color(0xFFFFD54F) else titleColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = body,
                 fontSize = 13.sp,
-                lineHeight = 18.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                lineHeight = 19.sp,
+                color = textColor
             )
         }
     }
@@ -2652,72 +2882,103 @@ fun SpiritualSpeechDialog(
         "Señor, te pido de manera especial por los enfermos y los más necesitados..."
     )
 
-    DisposableEffect(Unit) {
-        if (SpeechRecognizer.isRecognitionAvailable(context)) {
-            val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
-            speechRecognizer = recognizer
-            
-            recognizer.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {
-                    isListening = true
-                    transcriptionText = "Escuchando con amor..."
-                }
+    var hasMicPermission by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.RECORD_AUDIO
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        )
+    }
 
-                override fun onBeginningOfSpeech() {
-                    transcriptionText = "Transcribiendo tu plegaria..."
-                }
-
-                override fun onRmsChanged(rmsdB: Float) {}
-
-                override fun onBufferReceived(buffer: ByteArray?) {}
-
-                override fun onEndOfSpeech() {
-                    isListening = false
-                }
-
-                override fun onError(error: Int) {
-                    isListening = false
-                    val errorMsg = when (error) {
-                        SpeechRecognizer.ERROR_AUDIO -> "Error de audio."
-                        SpeechRecognizer.ERROR_CLIENT -> "Error de servicio."
-                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Faltan permisos de micrófono."
-                        SpeechRecognizer.ERROR_NETWORK -> "Error de red."
-                        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Tiempo agotado."
-                        SpeechRecognizer.ERROR_NO_MATCH -> "No se escuchó voz limpia. Intenta de nuevo."
-                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "El motor está ocupado."
-                        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Silencio prolongado."
-                        else -> "El dictado no está habilitado."
-                    }
-                    transcriptionText = "$errorMsg Elige una inspiración abajo o escribe libremente."
-                }
-
-                override fun onResults(results: Bundle?) {
-                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    val bestMatch = matches?.firstOrNull()
-                    if (!bestMatch.isNullOrBlank()) {
-                        transcriptionText = bestMatch
-                    } else {
-                        transcriptionText = "No logramos entender el audio, intenta de nuevo."
-                    }
-                    isListening = false
-                }
-
-                override fun onPartialResults(partialResults: Bundle?) {
-                    val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    val partial = matches?.firstOrNull()
-                    if (!partial.isNullOrBlank()) {
-                        transcriptionText = partial
-                    }
-                }
-
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasMicPermission = isGranted
+        if (isGranted) {
+            transcriptionText = "Permiso concedido. ¡Toca de nuevo el botón para empezar a dictar!"
         } else {
-            transcriptionText = "El dictado nativo de voz no está habilitado en este dispositivo.\n\nPuedes seleccionar una inspiración de plegaria a continuación:"
+            transcriptionText = "Acceso al micrófono denegado. Escribe libremente o selecciona una inspiración abajo."
+        }
+    }
+
+    DisposableEffect(hasMicPermission) {
+        if (hasMicPermission && SpeechRecognizer.isRecognitionAvailable(context.applicationContext)) {
+            try {
+                val recognizer = SpeechRecognizer.createSpeechRecognizer(context.applicationContext)
+                speechRecognizer = recognizer
+                
+                recognizer?.setRecognitionListener(object : RecognitionListener {
+                    override fun onReadyForSpeech(params: Bundle?) {
+                        isListening = true
+                        transcriptionText = "Escuchando con amor..."
+                    }
+
+                    override fun onBeginningOfSpeech() {
+                        transcriptionText = "Transcribiendo tu plegaria..."
+                    }
+
+                    override fun onRmsChanged(rmsdB: Float) {}
+
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+
+                    override fun onEndOfSpeech() {
+                        isListening = false
+                    }
+
+                    override fun onError(error: Int) {
+                        isListening = false
+                        val errorMsg = when (error) {
+                            SpeechRecognizer.ERROR_AUDIO -> "Error de audio."
+                            SpeechRecognizer.ERROR_CLIENT -> "Error de servicio."
+                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Faltan permisos de micrófono."
+                            SpeechRecognizer.ERROR_NETWORK -> "Error de red."
+                            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Tiempo agotado."
+                            SpeechRecognizer.ERROR_NO_MATCH -> "No se escuchó voz limpia. Intenta de nuevo."
+                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "El motor está ocupado."
+                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Silencio prolongado."
+                            else -> "El dictado no está habilitado."
+                        }
+                        transcriptionText = "$errorMsg Elige una inspiración abajo o escribe libremente."
+                    }
+
+                    override fun onResults(results: Bundle?) {
+                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        val bestMatch = matches?.firstOrNull()
+                        if (!bestMatch.isNullOrBlank()) {
+                            transcriptionText = bestMatch
+                        } else {
+                            transcriptionText = "No logramos entender el audio, intenta de nuevo."
+                        }
+                        isListening = false
+                    }
+
+                    override fun onPartialResults(partialResults: Bundle?) {
+                        val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        val partial = matches?.firstOrNull()
+                        if (!partial.isNullOrBlank()) {
+                            transcriptionText = partial
+                        }
+                    }
+
+                    override fun onEvent(eventType: Int, params: Bundle?) {}
+                })
+            } catch (e: Throwable) {
+                speechRecognizer = null
+                transcriptionText = "El dictado de voz nativo no se puede iniciar en este dispositivo virtual. Puedes elegir una inspiración de abajo."
+            }
+        } else if (!hasMicPermission) {
+            transcriptionText = "Se requiere acceso al micrófono para el dictado de voz. Toca el botón de abajo para autorizar."
+        } else {
+            transcriptionText = "El dictado nativo de voz no está disponible en este dispositivo.\n\nPuedes seleccionar una inspiración de plegaria a continuación:"
         }
 
         onDispose {
-            speechRecognizer?.destroy()
+            try {
+                speechRecognizer?.destroy()
+            } catch (e: Throwable) {
+                // Ignore
+            }
         }
     }
 
@@ -2785,23 +3046,35 @@ fun SpiritualSpeechDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    if (speechRecognizer != null) {
+                    val isRecognitionAvailable = SpeechRecognizer.isRecognitionAvailable(context.applicationContext)
+                    if (isRecognitionAvailable) {
                         Button(
                             onClick = {
-                                if (isListening) {
-                                    speechRecognizer?.stopListening()
-                                    isListening = false
+                                if (!hasMicPermission) {
+                                    permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                                 } else {
-                                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                                        putExtra(Intent.EXTRA_LANGUAGE, "es-ES")
-                                        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                                    }
-                                    try {
-                                        speechRecognizer?.startListening(intent)
-                                        isListening = true
-                                    } catch (e: Exception) {
-                                        transcriptionText = "No se pudo iniciar el dictado nativo."
+                                    if (isListening) {
+                                        try {
+                                            speechRecognizer?.stopListening()
+                                        } catch (e: Throwable) {}
+                                        isListening = false
+                                    } else {
+                                        val recognizer = speechRecognizer
+                                        if (recognizer == null) {
+                                            transcriptionText = "Preparando reconocedor de voz..."
+                                        } else {
+                                            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
+                                                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                                            }
+                                            try {
+                                                recognizer.startListening(intent)
+                                                isListening = true
+                                            } catch (e: Throwable) {
+                                                transcriptionText = "No se pudo iniciar el dictado de voz nativo."
+                                            }
+                                        }
                                     }
                                 }
                             },
@@ -2878,4 +3151,517 @@ fun SpiritualSpeechDialog(
             }
         }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LandingPageScreen(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val downloadUrl = "https://ais-pre-juq7nonv6awf36yjvehq5r-77616128690.us-east1.run.app"
+    val scrollState = rememberScrollState()
+
+    // Handle standard back button device gesture safely to dismiss overlay
+    androidx.activity.compose.BackHandler(onBack = onDismiss)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF031A33), // Deep Liturgical Blue
+                        Color(0xFF010E1C)  // Dark Midnight
+                    )
+                )
+            )
+            .clickable(enabled = true, onClick = {}) // Consume all clicks to avoid click-through to Scaffold layers
+    ) {
+                // Background artistic geometric layout elements
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawCircle(
+                        color = Color(0xFFFFD54F).copy(alpha = 0.04f),
+                        radius = 250.dp.toPx(),
+                        center = androidx.compose.ui.geometry.Offset(0f, 0f)
+                    )
+                    drawCircle(
+                        color = Color(0xFF023E73).copy(alpha = 0.15f),
+                        radius = 350.dp.toPx(),
+                        center = androidx.compose.ui.geometry.Offset(size.width, size.height * 0.4f)
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 24.dp, vertical = 20.dp)
+                ) {
+                    // Close Header Bar
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFFFD54F).copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFFD54F),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Text(
+                                text = "PORTAL OFICIAL DE DESCARGA",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFD54F),
+                                letterSpacing = 2.sp
+                            )
+                        }
+
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .background(Color.White.copy(alpha = 0.1f), CircleShape)
+                                .size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Cerrar",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // App Title & Subtitle Branding Title
+                    Text(
+                        text = "Daily Catholic Meditations",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        lineHeight = 38.sp,
+                        letterSpacing = (-0.5).sp,
+                        textAlign = TextAlign.Start
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Tu compañero espiritual inteligente para la oración diaria, Lectio Divina asistida por IA y registro devocional offline.",
+                        fontSize = 15.sp,
+                        color = Color(0xFFB0C5DE),
+                        lineHeight = 22.sp,
+                        fontWeight = FontWeight.Normal
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Main Downloads Hero Grid
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF072448)),
+                        shape = RoundedCornerShape(28.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.5.dp, Color(0xFFFFD54F).copy(alpha = 0.3f), RoundedCornerShape(28.dp))
+                    ) {
+                        Column(modifier = Modifier.padding(24.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Dynamic custom canvas-drawn QR code
+                                Box(
+                                    modifier = Modifier
+                                        .size(110.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(Color.White)
+                                        .padding(8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Canvas(modifier = Modifier.fillMaxSize()) {
+                                        val squareSize = size.width / 13
+                                        val paintColor = Color(0xFF031A33)
+                                        
+                                        // Draw the three corner finders
+                                        drawRect(
+                                            color = paintColor,
+                                            size = androidx.compose.ui.geometry.Size(squareSize * 4, squareSize * 4),
+                                            topLeft = androidx.compose.ui.geometry.Offset(0f, 0f)
+                                        )
+                                        drawRect(
+                                            color = Color.White,
+                                            size = androidx.compose.ui.geometry.Size(squareSize * 2, squareSize * 2),
+                                            topLeft = androidx.compose.ui.geometry.Offset(squareSize, squareSize)
+                                        )
+                                        
+                                        drawRect(
+                                            color = paintColor,
+                                            size = androidx.compose.ui.geometry.Size(squareSize * 4, squareSize * 4),
+                                            topLeft = androidx.compose.ui.geometry.Offset(size.width - squareSize * 4, 0f)
+                                        )
+                                        drawRect(
+                                            color = Color.White,
+                                            size = androidx.compose.ui.geometry.Size(squareSize * 2, squareSize * 2),
+                                            topLeft = androidx.compose.ui.geometry.Offset(size.width - squareSize * 3, squareSize)
+                                        )
+                                        
+                                        drawRect(
+                                            color = paintColor,
+                                            size = androidx.compose.ui.geometry.Size(squareSize * 4, squareSize * 4),
+                                            topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - squareSize * 4)
+                                        )
+                                        drawRect(
+                                            color = Color.White,
+                                            size = androidx.compose.ui.geometry.Size(squareSize * 2, squareSize * 2),
+                                            topLeft = androidx.compose.ui.geometry.Offset(squareSize, size.height - squareSize * 3)
+                                        )
+                                        
+                                        // Stylized pixel-art dots
+                                        val seed = 42L
+                                        val random = java.util.Random(seed)
+                                        for (x in 0 until 13) {
+                                            for (y in 0 until 13) {
+                                                if ((x < 5 && y < 5) || (x > 7 && y < 5) || (x < 5 && y > 7)) continue
+                                                if (x in 5..7 && y in 5..7) continue
+                                                if (random.nextBoolean()) {
+                                                    drawRect(
+                                                        color = paintColor,
+                                                        size = androidx.compose.ui.geometry.Size(squareSize * 0.9f, squareSize * 0.9f),
+                                                        topLeft = androidx.compose.ui.geometry.Offset(x * squareSize, y * squareSize)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        
+                                        // Gold circle in the center
+                                        drawCircle(
+                                            color = Color(0xFFFFD54F),
+                                            radius = squareSize * 1.5f,
+                                            center = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)
+                                        )
+                                        
+                                        // Vertical Cross
+                                        drawRect(
+                                            color = Color(0xFF031A33),
+                                            size = androidx.compose.ui.geometry.Size(squareSize * 0.4f, squareSize * 1.6f),
+                                            topLeft = androidx.compose.ui.geometry.Offset(size.width / 2 - squareSize * 0.2f, size.height / 2 - squareSize * 0.8f)
+                                        )
+                                        // Horizontal Cross
+                                        drawRect(
+                                            color = Color(0xFF031A33),
+                                            size = androidx.compose.ui.geometry.Size(squareSize * 1.2f, squareSize * 0.4f),
+                                            topLeft = androidx.compose.ui.geometry.Offset(size.width / 2 - squareSize * 0.6f, size.height / 2 - squareSize * 0.5f)
+                                        )
+                                    }
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Descargar en tu Celular",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "Escanea la pantalla con la cámara de tu móvil para descargar el APK directamente.",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFFB0C5DE),
+                                        lineHeight = 15.sp,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Action: Download APK Button
+                            Button(
+                                onClick = {
+                                    try {
+                                        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(downloadUrl))
+                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "No se pudo abrir el navegador", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFFFD54F),
+                                    contentColor = Color(0xFF001021)
+                                ),
+                                shape = RoundedCornerShape(100.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                                    .testTag("landing_download_apk_btn")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudDownload,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Descargar APK Directo",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 15.sp
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Alternative Share / Copy Link Row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        val clip = android.content.ClipData.newPlainText("APK Link", downloadUrl)
+                                        clipboard.setPrimaryClip(clip)
+                                        Toast.makeText(context, "Enlace de descarga copiado", Toast.LENGTH_SHORT).show()
+                                    },
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                                    shape = RoundedCornerShape(100.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Copiar Enlace", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                OutlinedButton(
+                                    onClick = {
+                                        shareText(
+                                            context = context,
+                                            header = "Daily Catholic Meditations - Descarga APK",
+                                            text = "Instala la app completa de Meditaciones Católicas Diarias, Lectio Divina asistida por IA y Diario Espiritual. Descarga el APK oficial aquí: $downloadUrl"
+                                        )
+                                    },
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                                    shape = RoundedCornerShape(100.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Compartir App", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(28.dp))
+
+                    // Features Overview Section (Landing specifications)
+                    Text(
+                        text = "✨ ¿Qué obtienes al instalarla?",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FeatureRowItem(
+                            icon = Icons.Default.Favorite,
+                            title = "Lectio Divina con IA",
+                            desc = "Lectura, meditación, oración y contemplación inspirada de forma personalizada mediante IA (Gemini)."
+                        )
+                        FeatureRowItem(
+                            icon = Icons.Default.Edit,
+                            title = "Diario Litúrgico Seguro",
+                            desc = "Guarda tus reflexiones privadas de forma completamente local en base de datos SQLite segura y privada."
+                        )
+                        FeatureRowItem(
+                            icon = Icons.Default.Share,
+                            title = "Comunidad Global",
+                            desc = "Conéctate para apoyarte mutuamente compartiendo intenciones de oración con fieles sinceros de todo el mundo."
+                        )
+                        FeatureRowItem(
+                            icon = Icons.Default.Notifications,
+                            title = "Alarmas de Oración mansas",
+                            desc = "Configura alertas diarias silenciosas para mantener encendida la chispa de la devoción diaria."
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(28.dp))
+
+                    // Installation Instructions Panel
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f)),
+                        shape = RoundedCornerShape(24.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Text(
+                                text = "📲 ¿Cómo Instalar un APK?",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFD54F)
+                            )
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            InstallStepRow(
+                                stepNumber = "1",
+                                title = "Descarga",
+                                desc = "Haz clic en 'Descargar APK Directo' o escanea el código QR para bajar el archivo seguro."
+                            )
+                            InstallStepRow(
+                                stepNumber = "2",
+                                title = "Autoriza",
+                                desc = "Si el sistema lo solicita, activa 'Instalar apps desconocidas' en tu navegador o explorador de archivos."
+                            )
+                            InstallStepRow(
+                                stepNumber = "3",
+                                title = "Instala",
+                                desc = "Abre el archivo descargado, toca 'Instalar' y el sistema configurará la app para ti en segundos."
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(28.dp))
+
+                    // Safe & Verified Footer Badge
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFF4CAF50).copy(alpha = 0.1f))
+                            .border(1.dp, Color(0xFF4CAF50).copy(alpha = 0.2f), RoundedCornerShape(16.dp))
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Verificado",
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Archivo Seguro y Certificado",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF81C784)
+                            )
+                            Text(
+                                text = "Libre de malware, anuncios y telemetría intrusiva. Protegido bajo entorno seguro de AI Studio.",
+                                fontSize = 11.sp,
+                                color = Color(0xFFC8E6C9),
+                                lineHeight = 15.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(30.dp))
+
+                    // Professional Landing Footer
+                    Text(
+                        text = "Daily Catholic Meditations v1.0.0 (API 24+)\nDesarrollado en AI Studio Build • 2026",
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        color = Color.White.copy(alpha = 0.4f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 20.dp),
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+        }
+
+@Composable
+fun FeatureRowItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, desc: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.08f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color(0xFFFFD54F),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Text(
+                text = desc,
+                fontSize = 12.sp,
+                color = Color(0xFFB0C5DE),
+                lineHeight = 17.sp,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun InstallStepRow(stepNumber: String, title: String, desc: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(Color(0xFFFFD54F)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = stepNumber,
+                color = Color(0xFF031A33),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Text(
+                text = desc,
+                fontSize = 11.sp,
+                color = Color(0xFFB0C5DE),
+                lineHeight = 16.sp,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+    }
 }

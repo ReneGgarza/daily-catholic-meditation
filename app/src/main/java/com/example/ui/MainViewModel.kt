@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.isActive
 import kotlin.math.sin
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -524,7 +525,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 // ==========================================
 class SpiritualSynth {
     private var audioTrack: AudioTrack? = null
-    private var isPlaying = false
+    @Volatile private var isPlaying = false
     private var synthJob: kotlinx.coroutines.Job? = null
     private var currentMode = 1
     private var currentVolume = 0.3f
@@ -541,6 +542,10 @@ class SpiritualSynth {
             AudioFormat.CHANNEL_OUT_MONO,
             AudioFormat.ENCODING_PCM_16BIT
         )
+        if (bufferSize <= 0) {
+            isPlaying = false
+            return
+        }
 
         try {
             audioTrack = AudioTrack(
@@ -553,7 +558,8 @@ class SpiritualSynth {
             )
             audioTrack?.setStereoVolume(volume, volume)
             audioTrack?.play()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            isPlaying = false
             return
         }
 
@@ -568,7 +574,7 @@ class SpiritualSynth {
             // C Major 7/9 Solfeggio Frequencies (432 Hz reference tuning)
             val padFreqs = doubleArrayOf(129.6, 162.0, 194.4, 243.0)
 
-            while (isPlaying) {
+            while (isPlaying && isActive) {
                 for (i in samples.indices) {
                     val t = phase / sampleRate
                     var value = 0.0
@@ -613,7 +619,7 @@ class SpiritualSynth {
                 if (isPlaying && audioTrack != null) {
                     try {
                         audioTrack?.write(samples, 0, samples.size)
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
                         break
                     }
                 }
@@ -625,7 +631,7 @@ class SpiritualSynth {
         currentVolume = volume
         try {
             audioTrack?.setStereoVolume(volume, volume)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             // Safe ignore
         }
     }
@@ -637,7 +643,7 @@ class SpiritualSynth {
         try {
             audioTrack?.stop()
             audioTrack?.release()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             // ignore safely
         }
         audioTrack = null
