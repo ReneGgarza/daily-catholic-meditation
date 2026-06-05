@@ -2865,6 +2865,43 @@ fun shareText(context: Context, header: String, text: String) {
     }
 }
 
+fun shareApkFile(context: Context) {
+    try {
+        val appInfo = context.applicationInfo
+        val srcFile = java.io.File(appInfo.sourceDir)
+        
+        // Dest file in Cache directory with a beautiful custom name
+        val destFile = java.io.File(context.cacheDir, "Meditaciones_Catolicas_Diarias.apk")
+        
+        // Copy the actual running APK from system sandbox path to our cache directory
+        srcFile.inputStream().use { input ->
+            destFile.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+        
+        // Retrieve Uri using the configured FileProvider securely
+        val apkUri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            destFile
+        )
+        
+        val sendIntent = Intent().apply {
+            action = Intent.ACTION_SEND
+            type = "application/vnd.android.package-archive"
+            putExtra(Intent.EXTRA_STREAM, apkUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        
+        val shareIntent = Intent.createChooser(sendIntent, "Compartir archivo APK con...")
+        shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(shareIntent)
+    } catch (e: Exception) {
+        Toast.makeText(context, "No se pudo compartir el archivo APK: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+    }
+}
+
 @Composable
 fun SpiritualSpeechDialog(
     onDismiss: () -> Unit,
@@ -3440,7 +3477,7 @@ fun LandingPageScreen(onDismiss: () -> Unit) {
                                 ) {
                                     Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Copiar Enlace", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("Copiar Enlace", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
 
                                 OutlinedButton(
@@ -3458,8 +3495,40 @@ fun LandingPageScreen(onDismiss: () -> Unit) {
                                 ) {
                                     Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Compartir App", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("Compartir Enlace", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Action: Direct File-Based APK Sharing Button
+                            Button(
+                                onClick = {
+                                    shareApkFile(context)
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF031A33).copy(alpha = 0.3f),
+                                    contentColor = Color.White
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFD54F).copy(alpha = 0.5f)),
+                                shape = RoundedCornerShape(100.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFFD54F),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Compartir APK (Archivo Directo)",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = Color.White
+                                )
                             }
                         }
                     }

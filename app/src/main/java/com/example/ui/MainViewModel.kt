@@ -524,11 +524,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 // REAL-TIME AUDIO SYNTHESIZER FOR PIOUS FOCUS
 // ==========================================
 class SpiritualSynth {
-    private var audioTrack: AudioTrack? = null
     @Volatile private var isPlaying = false
     private var synthJob: kotlinx.coroutines.Job? = null
-    private var currentMode = 1
-    private var currentVolume = 0.3f
+    @Volatile private var currentMode = 1
+    @Volatile private var currentVolume = 0.3f
 
     fun start(scope: kotlinx.coroutines.CoroutineScope, mode: Int, volume: Float) {
         stop()
@@ -547,105 +546,99 @@ class SpiritualSynth {
             return
         }
 
-        try {
-            audioTrack = AudioTrack(
-                android.media.AudioManager.STREAM_MUSIC,
-                sampleRate,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                bufferSize,
-                AudioTrack.MODE_STREAM
-            )
-            audioTrack?.setStereoVolume(volume, volume)
-            audioTrack?.play()
-        } catch (e: Throwable) {
-            isPlaying = false
-            return
-        }
-
         synthJob = scope.launch(Dispatchers.Default) {
-            val samples = ShortArray(bufferSize)
-            var phase = 0.0
-            var harpTimer = 0
-            val harpInterval = (sampleRate * 2.5).toInt() // arpeggio speed
-            var currentHarpFreq = 0f
-            var harpEnvelope = 0f
+            var track: AudioTrack? = null
+            try {
+                track = AudioTrack(
+                    android.media.AudioManager.STREAM_MUSIC,
+                    sampleRate,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    bufferSize,
+                    AudioTrack.MODE_STREAM
+                )
+                track.setStereoVolume(currentVolume, currentVolume)
+                track.play()
 
-            // C Major 7/9 Solfeggio Frequencies (432 Hz reference tuning)
-            val padFreqs = doubleArrayOf(129.6, 162.0, 194.4, 243.0)
+                val samples = ShortArray(bufferSize)
+                var phase = 0.0
+                var harpTimer = 0
+                val harpInterval = (sampleRate * 2.5).toInt() // arpeggio speed
+                var currentHarpFreq = 0f
+                var harpEnvelope = 0f
 
-            while (isPlaying && isActive) {
-                for (i in samples.indices) {
-                    val t = phase / sampleRate
-                    var value = 0.0
+                // C Major 7/9 Solfeggio Frequencies (432 Hz reference tuning)
+                val padFreqs = doubleArrayOf(129.6, 162.0, 194.4, 243.0)
 
-                    when (currentMode) {
-                        1 -> { // Peace Solfeggio Pad
-                            val lfo = 0.6 + 0.4 * sin(2.0 * Math.PI * 0.08 * t)
-                            for (fIdx in padFreqs.indices) {
-                                val freq = padFreqs[fIdx]
-                                value += sin(2.0 * Math.PI * freq * t + fIdx) * 0.2
+                while (isPlaying && isActive) {
+                    val vol = currentVolume
+                    val modeNow = currentMode
+                    for (i in samples.indices) {
+                        val t = phase / sampleRate
+                        var value = 0.0
+
+                        when (modeNow) {
+                            1 -> { // Peace Solfeggio Pad
+                                val lfo = 0.6 + 0.4 * sin(2.0 * Math.PI * 0.08 * t)
+                                for (fIdx in padFreqs.indices) {
+                                    val freq = padFreqs[fIdx]
+                                    value += sin(2.0 * Math.PI * freq * t + fIdx) * 0.2
+                                }
+                                value *= lfo
                             }
-                            value *= lfo
-                        }
-                        2 -> { // Temple Harp Arpeggio
-                            if (harpTimer <= 0) {
-                                val pentatonic = floatArrayOf(259.2f, 291.6f, 324.0f, 388.8f, 437.4f, 518.4f)
-                                currentHarpFreq = pentatonic.random()
-                                harpEnvelope = 1.0f
-                                harpTimer = harpInterval
+                            2 -> { // Temple Harp Arpeggio
+                                if (harpTimer <= 0) {
+                                    val pentatonic = floatArrayOf(259.2f, 291.6f, 324.0f, 388.8f, 437.4f, 518.4f)
+                                    currentHarpFreq = pentatonic.random()
+                                    harpEnvelope = 1.0f
+                                    harpTimer = harpInterval
+                                }
+                                if (harpEnvelope > 0) {
+                                    value += sin(2.0 * Math.PI * currentHarpFreq * t) * harpEnvelope * 0.3
+                                    harpEnvelope *= 0.99988f // slow bell decay
+                                }
+                                value += sin(2.0 * Math.PI * 129.6 * t) * 0.08 // base drone
+                                harpTimer--
                             }
-                            if (harpEnvelope > 0) {
-                                value += sin(2.0 * Math.PI * currentHarpFreq * t) * harpEnvelope * 0.3
-                                harpEnvelope *= 0.99988f // slow bell decay
+                            3 -> { // Ambient breathing guide pulse (6 seconds rhythm)
+                                val breathPulse = sin(2.0 * Math.PI * (1.0 / 6.0) * t)
+                                val absolutePulse = (breathPulse + 1.0) / 2.0
+                                value = sin(2.0 * Math.PI * 136.1 * t) * 0.25 * absolutePulse
                             }
-                            value += sin(2.0 * Math.PI * 129.6 * t) * 0.08 // base drone
-                            harpTimer--
                         }
-                        3 -> { // Ambient breathing guide pulse (6 seconds rhythm)
-                            val breathPulse = sin(2.0 * Math.PI * (1.0 / 6.0) * t)
-                            val absolutePulse = (breathPulse + 1.0) / 2.0
-                            value = sin(2.0 * Math.PI * 136.1 * t) * 0.25 * absolutePulse
-                        }
+
+                        if (value > 1.0) value = 1.0
+                        if (value < -1.0) value = -1.0
+
+                        samples[i] = (value * 32767 * vol).toInt().toShort()
+                        phase += 1.0
                     }
 
-                    if (value > 1.0) value = 1.0
-                    if (value < -1.0) value = -1.0
-
-                    samples[i] = (value * 32767 * currentVolume).toInt().toShort()
-                    phase += 1.0
-                }
-
-                if (isPlaying && audioTrack != null) {
-                    try {
-                        audioTrack?.write(samples, 0, samples.size)
-                    } catch (e: Throwable) {
-                        break
+                    if (isPlaying && isActive) {
+                        track.write(samples, 0, samples.size)
                     }
                 }
+            } catch (e: Throwable) {
+                // handle silently or ignore
+            } finally {
+                isPlaying = false
+                try {
+                    track?.stop()
+                } catch (e: Throwable) {}
+                try {
+                    track?.release()
+                } catch (e: Throwable) {}
             }
         }
     }
 
     fun setVolume(volume: Float) {
         currentVolume = volume
-        try {
-            audioTrack?.setStereoVolume(volume, volume)
-        } catch (e: Throwable) {
-            // Safe ignore
-        }
     }
 
     fun stop() {
         isPlaying = false
         synthJob?.cancel()
         synthJob = null
-        try {
-            audioTrack?.stop()
-            audioTrack?.release()
-        } catch (e: Throwable) {
-            // ignore safely
-        }
-        audioTrack = null
     }
 }
