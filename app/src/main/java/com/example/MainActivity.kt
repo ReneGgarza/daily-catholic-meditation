@@ -255,24 +255,6 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Landing / Descarga APK Quick Action Box
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFFFF59D)) // Gold accent color
-                                .clickable { showLandingPage = true }
-                                .testTag("btn_downloads_landing"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CloudDownload,
-                                contentDescription = "Descargar APK / Landing",
-                                tint = Color(0xFF0F1E36),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
                         // Alerta/Reminders Quick Action Box
                         Box(
                             modifier = Modifier
@@ -856,15 +838,14 @@ fun TodayScreen(
             }
         }
 
-        // Portal de Descargas / Landing Page Quick Access Card
+        // PWA Installation Guide (Añadir a pantalla de inicio)
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFFFFFAEC)) // Warm white gold
-                    .border(1.dp, Color(0xFFFFD54F), RoundedCornerShape(20.dp))
-                    .clickable { onOpenLanding() }
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
                     .padding(16.dp)
             ) {
                 Row(
@@ -875,38 +856,31 @@ fun TodayScreen(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFFFD54F))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
                             .padding(8.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.CloudDownload,
-                            contentDescription = "Portal de Descarga APK",
-                            tint = Color(0xFF132338),
+                            imageVector = Icons.Default.AddToHomeScreen,
+                            contentDescription = "Añadir a la pantalla de inicio",
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Portal de Descarga APK",
+                            text = "Añadir a inicio",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF132338)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Instala en tu móvil o escanea el QR en pantalla",
+                            text = "Instala como aplicación web nativa sin descargas externas.",
                             fontSize = 11.sp,
-                            color = Color(0xFF132338).copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                     }
-
-                    Icon(
-                        imageVector = Icons.Default.ArrowForward,
-                        contentDescription = "Abrir Portal",
-                        tint = Color(0xFF132338),
-                        modifier = Modifier.size(18.dp)
-                    )
                 }
             }
         }
