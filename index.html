@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Daily Catholic Meditations</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <meta name="theme-color" content="#031A33">
+    
+    <!-- PWA Setup manifest (Placeholder for Netlify setup) -->
+    <!-- <link rel="manifest" href="/manifest.json"> -->
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        catholic: {
+                            base: '#031A33',
+                            card: '#0D2746',
+                            highlight: '#16365C',
+                            gold: '#FFD54F',
+                            text: '#E2E8F0',
+                            accent: '#FFE082'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #031A33;
+            color: #E2E8F0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Hide scrollbar for clean UI */
+        .hide-scroll::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scroll {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .nav-item {
+            color: #64748B;
+            transition: all 0.3s ease;
+        }
+        .nav-item.active {
+            color: #FFD54F;
+        }
+        .bounce-on-click:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden selection:bg-catholic-gold selection:text-black">
+
+    <!-- Top Header -->
+    <header class="flex justify-between items-center px-5 py-4 bg-catholic-base sticky top-0 z-20 shadow-sm border-b border-gray-800/50">
+        <div>
+            <h1 class="text-xl font-bold tracking-tight text-white">Hola, <span class="text-catholic-gold">Hermano Peregrino</span></h1>
+            <p class="text-xs text-gray-400 font-medium">Domingo, tiempo ordinario</p>
+        </div>
+        <div class="flex gap-3">
+            <button class="w-10 h-10 rounded-full bg-catholic-highlight flex items-center justify-center relative shadow-lg bounce-on-click">
+                <i class="fas fa-bell text-gray-300 text-sm"></i>
+                <span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-catholic-base"></span>
+            </button>
+            <button class="w-10 h-10 rounded-full bg-catholic-highlight flex items-center justify-center shadow-lg bounce-on-click">
+                <i class="fas fa-user text-gray-300 text-sm"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Scrollable Content -->
+    <main class="flex-1 overflow-y-auto hide-scroll pb-28 px-5 pt-4 space-y-6">
+
+        <!-- PWA Installation Suggestion Banner -->
+        <div id="pwa-banner" class="bg-catholic-highlight border border-catholic-gold/20 rounded-2xl p-4 flex items-center justify-between shadow-md">
+            <div class="flex items-center gap-4">
+                <div class="bg-catholic-gold/20 p-2.5 rounded-xl">
+                    <i class="fas fa-arrow-down-to-bracket text-catholic-gold text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-sm text-white">Añadir a inicio</h3>
+                    <p class="text-xs text-gray-300 mt-0.5">Instalar web app sin descargas.</p>
+                </div>
+            </div>
+            <button id="close-banner" class="text-gray-400 hover:text-white p-2">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Evangely Block -->
+        <div class="bg-gradient-to-b from-catholic-highlight to-catholic-card border border-gray-700/50 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+            <div class="absolute -top-4 -right-4 opacity-5 pointer-events-none">
+                <i class="fas fa-cross text-9xl text-white"></i>
+            </div>
+            
+            <div class="relative z-10">
+                <span class="text-xs font-bold uppercase tracking-widest text-catholic-gold mb-2 block flex items-center gap-2">
+                    <i class="fas fa-book-bible"></i> Evangelio del Día
+                </span>
+                <h2 class="text-2xl font-serif font-bold text-white mb-3">Mateo 8:23-27</h2>
+                <p class="text-gray-300 text-sm leading-relaxed mb-6 italic opacity-90">
+                    "Subió Jesús a la barca y sus discípulos lo siguieron. De pronto se levantó en el mar una tempestad tan grande que las olas cubrían la barca; pero él dormía. Se le acercaron y lo despertaron diciéndole: '¡Señor, sálvanos, que perecemos!'. Él les dijo: '¿Por qué tienen miedo, hombres de poca fe?'"
+                </p>
+                
+                <button onclick="meditateWithAI()" class="w-full py-3.5 bg-catholic-gold text-black rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-yellow-400 shadow-lg bounce-on-click transition-colors">
+                    <i class="fas fa-sparkles"></i> Re-meditar con IA
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <!-- Streak Counter -->
+            <div class="bg-catholic-card border border-gray-800/80 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md bounce-on-click cursor-pointer">
+                <i class="fas fa-fire text-orange-400 text-2xl mb-2 filter drop-shadow-md"></i>
+                <h3 class="text-3xl font-bold text-white tracking-tight">12</h3>
+                <p class="text-xs text-gray-400 font-medium mt-1">Días seguidos</p>
+            </div>
+            
+            <!-- Journal Access -->
+            <div class="bg-catholic-card border border-gray-800/80 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md bounce-on-click cursor-pointer">
+                <i class="fas fa-book-open text-blue-400 text-2xl mb-2 filter drop-shadow-md"></i>
+                <h3 class="text-lg font-bold text-white mb-0.5">Mi Diario</h3>
+                <p class="text-xs text-gray-400 font-medium mt-1">5 entradas</p>
+            </div>
+        </div>
+
+        <!-- Lectio Divina Section -->
+        <div class="pt-2">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <i class="fas fa-dove text-catholic-gold"></i> Lectio Divina Asistida
+            </h3>
+            
+            <div class="space-y-3">
+                <!-- Lectio -->
+                <div class="bg-catholic-card rounded-2xl p-4 border border-gray-800/60 border-l-4 border-l-blue-400 shadow-sm cursor-pointer hover:bg-catholic-highlight transition">
+                    <h4 class="font-bold text-blue-300 mb-1 text-sm">1. Lectio (Lectura)</h4>
+                    <p class="text-xs text-gray-300">¿Qué dice el texto bíblico en sí mismo?</p>
+                </div>
+                
+                <!-- Meditatio -->
+                <div class="bg-catholic-card rounded-2xl p-4 border border-gray-800/60 border-l-4 border-l-purple-400 shadow-sm cursor-pointer hover:bg-catholic-highlight transition">
+                    <h4 class="font-bold text-purple-300 mb-1 text-sm">2. Meditatio (Meditación)</h4>
+                    <p class="text-xs text-gray-300">¿Qué me dice a mí este texto hoy?</p>
+                </div>
+                
+                <!-- Oratio -->
+                <div class="bg-catholic-card rounded-2xl p-4 border border-gray-800/60 border-l-4 border-l-green-400 shadow-sm cursor-pointer hover:bg-catholic-highlight transition">
+                    <h4 class="font-bold text-green-300 mb-1 text-sm">3. Oratio (Oración)</h4>
+                    <p class="text-xs text-gray-300">¿Qué le digo al Señor motivado por su Palabra?</p>
+                </div>
+                
+                <!-- Contemplatio -->
+                <div class="bg-catholic-card rounded-2xl p-4 border border-gray-800/60 border-l-4 border-l-catholic-gold shadow-sm cursor-pointer hover:bg-catholic-highlight transition">
+                    <h4 class="font-bold text-catholic-gold mb-1 text-sm">4. Contemplatio (Contemplación)</h4>
+                    <p class="text-xs text-gray-300">¿Qué conversión de vida me pide Dios?</p>
+                </div>
+            </div>
+        </div>
+        
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="bg-catholic-base border-t border-gray-800/80 fixed bottom-0 w-full px-6 py-4 flex justify-between items-center pb-safe shadow-[0_-10px_20px_rgba(0,0,0,0.3)]">
+        <button class="nav-item active flex flex-col items-center gap-1.5 w-16 bounce-on-click">
+            <i class="fas fa-home text-xl"></i>
+            <span class="text-[10px] font-bold tracking-wide">Hoy</span>
+        </button>
+        <button class="nav-item flex flex-col items-center gap-1.5 w-16 bounce-on-click">
+            <i class="fas fa-book text-xl"></i>
+            <span class="text-[10px] font-bold tracking-wide">Diario</span>
+        </button>
+        <button class="nav-item flex flex-col items-center gap-1.5 w-16 bounce-on-click">
+            <i class="fas fa-users text-xl"></i>
+            <span class="text-[10px] font-bold tracking-wide">Comu</span>
+        </button>
+        <button class="nav-item flex flex-col items-center gap-1.5 w-16 bounce-on-click">
+            <i class="fas fa-pray text-xl"></i>
+            <span class="text-[10px] font-bold tracking-wide">Paz</span>
+        </button>
+    </nav>
+
+    <script>
+        // -------------------------------------------------------------
+        // LOGIC FOR SIMULATION & PWA
+        // -------------------------------------------------------------
+
+        // 1. Navigation Highlighting
+        const navItems = document.querySelectorAll('.nav-item');
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                navItems.forEach(nav => nav.classList.remove('active'));
+                item.classList.add('active');
+            });
+        });
+
+        // 2. Banner Logic
+        const banner = document.getElementById('pwa-banner');
+        const closeBanner = document.getElementById('close-banner');
+        closeBanner.addEventListener('click', () => {
+            banner.style.display = 'none';
+        });
+
+        // 3. Environment Variables (Netlify/Vite PWA Ready)
+        // Ensure you never hardcode the key in production
+        // In Vite: import.meta.env.VITE_GEMINI_API_KEY
+        // In Next.js: process.env.NEXT_PUBLIC_GEMINI_API_KEY
+        // Here we simulate the config to keep code prepared.
+        
+        function getGeminiApiKey() {
+            // Netlify injected variable check (simulation)
+            let apiKey = '';
+            
+            // Example Next configuration structure check:
+            if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
+                apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+            } 
+            // Example Vite configuration structure check:
+            else if (typeof import_meta !== 'undefined' && import_meta.env && import_meta.env.VITE_GEMINI_API_KEY) {
+                apiKey = import_meta.env.VITE_GEMINI_API_KEY;
+            }
+            
+            return apiKey;
+        }
+
+        // 4. Simulate Action
+        async function meditateWithAI() {
+            const key = getGeminiApiKey();
+            if (!key || key === '') {
+                alert("Simulación IA: Inyecta tu API_KEY a través de las variables de entorno de Netlify (e.g. VITE_GEMINI_API_KEY) para habilitar esta función en producción.");
+            } else {
+                alert("Llamando a Gemini API con clave protegida...");
+            }
+        }
+    </script>
+</body>
+</html>
