@@ -54,15 +54,54 @@
         .bounce-on-click:active {
             transform: scale(0.95);
         }
+        .hidden-section {
+            display: none !important;
+        }
+        .lectio-content {
+            display: none;
+            margin-top: 10px;
+            font-size: 13px;
+            color: #cbd5e1;
+            line-height: 1.5;
+        }
+        .lectio-content.open {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        .chip {
+            padding: 6px 14px;
+            border-radius: 20px;
+            background: rgba(255, 213, 79, 0.1);
+            border: 1px solid rgba(255, 213, 79, 0.3);
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #E2E8F0;
+        }
+        .chip.active {
+            background: rgba(255, 213, 79, 0.9);
+            color: #031A33;
+            font-weight: bold;
+            border-color: #FFD54F;
+        }
+        #modal-overlay {
+            display: none;
+        }
+        #modal-overlay.open {
+            display: flex;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden selection:bg-catholic-gold selection:text-black">
 
     <!-- Top Header -->
-    <header class="flex justify-between items-center px-5 py-4 bg-catholic-base sticky top-0 z-20 shadow-sm border-b border-gray-800/50">
+    <header class="flex justify-between items-center px-5 py-4 bg-catholic-base sticky top-0 z-20 shadow-sm border-b border-gray-800/50" id="main-header">
         <div>
             <h1 class="text-xl font-bold tracking-tight text-white">Hola, <span class="text-catholic-gold">Hermano Peregrino</span></h1>
-            <p class="text-xs text-gray-400 font-medium">Domingo, tiempo ordinario</p>
+            <p class="text-xs text-gray-400 font-medium" id="header-subtitle">Domingo, tiempo ordinario</p>
         </div>
         <div class="flex gap-3">
             <button class="w-10 h-10 rounded-full bg-catholic-highlight flex items-center justify-center relative shadow-lg bounce-on-click">
@@ -76,168 +115,675 @@
     </header>
 
     <!-- Main Scrollable Content -->
-    <main class="flex-1 overflow-y-auto hide-scroll pb-28 px-5 pt-4 space-y-6">
+    <main class="flex-1 overflow-y-auto hide-scroll pb-28 px-5 pt-4 space-y-6" id="main-container">
 
-        <!-- PWA Installation Suggestion Banner -->
-        <div id="pwa-banner" class="bg-catholic-highlight border border-catholic-gold/20 rounded-2xl p-4 flex items-center justify-between shadow-md">
-            <div class="flex items-center gap-4">
-                <div class="bg-catholic-gold/20 p-2.5 rounded-xl">
-                    <i class="fas fa-arrow-down-to-bracket text-catholic-gold text-lg"></i>
+        <!-- =======================
+             PESTAÑA 1: HOY
+        ======================== -->
+        <section id="section-hoy" class="space-y-6">
+            <!-- PWA Installation Suggestion Banner -->
+            <div id="pwa-banner" class="bg-catholic-highlight border border-catholic-gold/20 rounded-2xl p-4 flex items-center justify-between shadow-md">
+                <div class="flex items-center gap-4">
+                    <div class="bg-catholic-gold/20 p-2.5 rounded-xl">
+                        <i class="fas fa-arrow-down-to-bracket text-catholic-gold text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-sm text-white">Añadir a inicio</h3>
+                        <p class="text-xs text-gray-300 mt-0.5">Instalar web app sin descargas.</p>
+                    </div>
                 </div>
-                <div>
-                    <h3 class="font-bold text-sm text-white">Añadir a inicio</h3>
-                    <p class="text-xs text-gray-300 mt-0.5">Instalar web app sin descargas.</p>
-                </div>
-            </div>
-            <button id="close-banner" class="text-gray-400 hover:text-white p-2">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-
-        <!-- Evangely Block -->
-        <div class="bg-gradient-to-b from-catholic-highlight to-catholic-card border border-gray-700/50 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-            <div class="absolute -top-4 -right-4 opacity-5 pointer-events-none">
-                <i class="fas fa-cross text-9xl text-white"></i>
-            </div>
-            
-            <div class="relative z-10">
-                <span class="text-xs font-bold uppercase tracking-widest text-catholic-gold mb-2 block flex items-center gap-2">
-                    <i class="fas fa-book-bible"></i> Evangelio del Día
-                </span>
-                <h2 class="text-2xl font-serif font-bold text-white mb-3">Mateo 8:23-27</h2>
-                <p class="text-gray-300 text-sm leading-relaxed mb-6 italic opacity-90">
-                    "Subió Jesús a la barca y sus discípulos lo siguieron. De pronto se levantó en el mar una tempestad tan grande que las olas cubrían la barca; pero él dormía. Se le acercaron y lo despertaron diciéndole: '¡Señor, sálvanos, que perecemos!'. Él les dijo: '¿Por qué tienen miedo, hombres de poca fe?'"
-                </p>
-                
-                <button onclick="meditateWithAI()" class="w-full py-3.5 bg-catholic-gold text-black rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-yellow-400 shadow-lg bounce-on-click transition-colors">
-                    <i class="fas fa-sparkles"></i> Re-meditar con IA
+                <button id="close-banner" class="text-gray-400 hover:text-white p-2">
+                    <i class="fas fa-times"></i>
                 </button>
             </div>
-        </div>
 
-        <div class="grid grid-cols-2 gap-4">
-            <!-- Streak Counter -->
-            <div class="bg-catholic-card border border-gray-800/80 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md bounce-on-click cursor-pointer">
-                <i class="fas fa-fire text-orange-400 text-2xl mb-2 filter drop-shadow-md"></i>
-                <h3 class="text-3xl font-bold text-white tracking-tight">12</h3>
-                <p class="text-xs text-gray-400 font-medium mt-1">Días seguidos</p>
+            <!-- Evangely Block -->
+            <div class="bg-gradient-to-b from-catholic-highlight to-catholic-card border border-gray-700/50 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                <div class="absolute -top-4 -right-4 opacity-5 pointer-events-none">
+                    <i class="fas fa-cross text-9xl text-white"></i>
+                </div>
+                
+                <div class="relative z-10">
+                    <span class="text-xs font-bold uppercase tracking-widest text-catholic-gold mb-2 block flex items-center gap-2">
+                        <i class="fas fa-book-bible"></i> Evangelio del Día
+                    </span>
+                    <h2 class="text-2xl font-serif font-bold text-white mb-3">Mateo 8:23-27</h2>
+                    <p class="text-gray-300 text-sm leading-relaxed mb-6 italic opacity-90">
+                        "Subió Jesús a la barca y sus discípulos lo siguieron. De pronto se levantó en el mar una tempestad tan grande que las olas cubrían la barca; pero él dormía. Se le acercaron y lo despertaron diciéndole: '¡Señor, sálvanos, que perecemos!'. Él les dijo: '¿Por qué tienen miedo, hombres de poca fe?'"
+                    </p>
+                    
+                    <button onclick="meditateWithAI()" class="w-full py-3.5 bg-catholic-gold text-black rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-yellow-400 shadow-lg bounce-on-click transition-colors">
+                        <i class="fas fa-sparkles"></i> Re-meditar con IA
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <!-- Streak Counter -->
+                <div class="bg-catholic-card border border-gray-800/80 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md bounce-on-click cursor-pointer">
+                    <i class="fas fa-fire text-orange-400 text-2xl mb-2 filter drop-shadow-md"></i>
+                    <h3 class="text-3xl font-bold text-white tracking-tight" id="streak-counter">12</h3>
+                    <p class="text-xs text-gray-400 font-medium mt-1">Días seguidos</p>
+                </div>
+                
+                <!-- Journal Access -->
+                <div class="bg-catholic-card border border-gray-800/80 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md bounce-on-click cursor-pointer" onclick="switchTab('diario')">
+                    <i class="fas fa-book-open text-blue-400 text-2xl mb-2 filter drop-shadow-md"></i>
+                    <h3 class="text-lg font-bold text-white mb-0.5">Mi Diario</h3>
+                    <p class="text-xs text-gray-400 font-medium mt-1" id="journal-count-hoy">5 entradas</p>
+                </div>
+            </div>
+
+            <!-- Lectio Divina Section -->
+            <div class="pt-2 pb-6">
+                <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <i class="fas fa-dove text-catholic-gold"></i> Lectio Divina Asistida
+                </h3>
+                
+                <div class="space-y-3">
+                    <!-- Lectio -->
+                    <div class="step-card bg-catholic-card rounded-2xl p-4 border border-gray-800/60 border-l-4 border-l-blue-400 shadow-sm cursor-pointer hover:bg-catholic-highlight transition" onclick="toggleLectio(this)">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h4 class="font-bold text-blue-300 mb-1 text-sm">1. Lectio (Lectura)</h4>
+                                <p class="text-xs text-gray-300">¿Qué dice el texto bíblico?</p>
+                            </div>
+                            <i class="fas fa-chevron-down text-gray-400 text-sm transition-transform duration-300"></i>
+                        </div>
+                        <div class="lectio-content">Jesús sube a la barca junto a sus discípulos. En medio del mar, se desata una tempestad violenta mientras Él duerme. Ante el pánico, los apóstoles lo despiertan, y Jesús reprende a los vientos y al mar, devolviendo la calma absoluta.</div>
+                    </div>
+                    
+                    <!-- Meditatio -->
+                    <div class="step-card bg-catholic-card rounded-2xl p-4 border border-gray-800/60 border-l-4 border-l-purple-400 shadow-sm cursor-pointer hover:bg-catholic-highlight transition" onclick="toggleLectio(this)">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h4 class="font-bold text-purple-300 mb-1 text-sm">2. Meditatio (Meditación)</h4>
+                                <p class="text-xs text-gray-300">¿Qué me dice a mí hoy?</p>
+                            </div>
+                            <i class="fas fa-chevron-down text-gray-400 text-sm transition-transform duration-300"></i>
+                        </div>
+                        <div class="lectio-content">¿Cuáles son las tempestades que sacuden la barca de mi vida actualmente? A veces siento que Dios "duerme" cuando más lo necesito. Jesús me invita a examinar mi fe y confiar en Su poder silencioso sobre mis problemas.</div>
+                    </div>
+                    
+                    <!-- Oratio -->
+                    <div class="step-card bg-catholic-card rounded-2xl p-4 border border-gray-800/60 border-l-4 border-l-green-400 shadow-sm cursor-pointer hover:bg-catholic-highlight transition" onclick="toggleLectio(this)">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h4 class="font-bold text-green-300 mb-1 text-sm">3. Oratio (Oración)</h4>
+                                <p class="text-xs text-gray-300">¿Qué le digo al Señor?</p>
+                            </div>
+                            <i class="fas fa-chevron-down text-gray-400 text-sm transition-transform duration-300"></i>
+                        </div>
+                        <div class="lectio-content">"Señor, sálvame porque perezco. Perdona mi poca fe frente a las adversidades. Ayúdame a recordar que siempre estás en mi barca, incluso en el silencio. Confío en que tú tienes la última palabra ante mis deudas, enfermedades y angustias."</div>
+                    </div>
+                    
+                    <!-- Contemplatio -->
+                    <div class="step-card bg-catholic-card rounded-2xl p-4 border border-gray-800/60 border-l-4 border-l-catholic-gold shadow-sm cursor-pointer hover:bg-catholic-highlight transition" onclick="toggleLectio(this)">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h4 class="font-bold text-catholic-gold mb-1 text-sm">4. Contemplatio (Contemplación)</h4>
+                                <p class="text-xs text-gray-300">¿Qué conversión me pide?</p>
+                            </div>
+                            <i class="fas fa-chevron-down text-gray-400 text-sm transition-transform duration-300"></i>
+                        </div>
+                        <div class="lectio-content">Viviré el día de hoy sin pánico ante los imprevistos. Me comprometo a responder con paciencia y oración profunda la próxima vez que enfrente una situación estresante. Que mi alma descanse en Cristo.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =======================
+             PESTAÑA 2: DIARIO
+        ======================== -->
+        <section id="section-diario" class="space-y-6 hidden-section">
+            <div class="flex items-center gap-3 mb-2">
+                <i class="fas fa-book-open text-3xl text-blue-400"></i>
+                <h2 class="text-2xl font-bold text-white">Mi Diario Espiritual</h2>
+            </div>
+
+            <!-- Add Entry Form -->
+            <div class="bg-gradient-to-b from-catholic-highlight to-catholic-card border border-gray-700 rounded-3xl p-5 shadow-xl">
+                <h3 class="font-bold text-sm text-catholic-gold mb-4 uppercase tracking-wider">Nueva Reflexión de Fe</h3>
+                
+                <input type="text" id="journal-title" placeholder="Título de tu reflexión..." class="w-full bg-catholic-base/50 border border-gray-700 text-white rounded-xl p-3 text-sm mb-3 focus:outline-none focus:border-catholic-gold transition">
+                <textarea id="journal-content" rows="4" placeholder="¿Cómo sentiste la presencia de Dios hoy?" class="w-full bg-catholic-base/50 border border-gray-700 text-white rounded-xl p-3 text-sm mb-4 focus:outline-none focus:border-catholic-gold transition"></textarea>
+                
+                <div class="mb-5">
+                    <p class="text-xs text-gray-400 mb-2 uppercase tracking-wide">Estado Espiritual</p>
+                    <div class="flex flex-wrap gap-2" id="mood-chips">
+                        <span class="chip text-xs active" onclick="selectMood(this)">Paz</span>
+                        <span class="chip text-xs" onclick="selectMood(this)">Consuelo</span>
+                        <span class="chip text-xs" onclick="selectMood(this)">Aridez</span>
+                        <span class="chip text-xs" onclick="selectMood(this)">Alegría</span>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center mb-5 border-t border-gray-700 pt-4">
+                    <p class="text-xs text-gray-400 uppercase tracking-wide">Grado de Paz:</p>
+                    <div class="flex gap-2 text-lg text-gray-600" id="star-rating">
+                        <i class="fas fa-star cursor-pointer hover:text-catholic-gold transition" onclick="setStar(1)"></i>
+                        <i class="fas fa-star cursor-pointer hover:text-catholic-gold transition" onclick="setStar(2)"></i>
+                        <i class="fas fa-star cursor-pointer hover:text-catholic-gold transition" onclick="setStar(3)"></i>
+                        <i class="fas fa-star cursor-pointer hover:text-catholic-gold transition" onclick="setStar(4)"></i>
+                        <i class="fas fa-star cursor-pointer hover:text-catholic-gold transition" onclick="setStar(5)"></i>
+                    </div>
+                </div>
+
+                <button onclick="saveJournalEntry()" class="w-full py-3.5 bg-catholic-gold text-black rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-yellow-400 bounce-on-click transition">
+                    <i class="fas fa-thumbtack"></i> + Clavar en el Diario
+                </button>
+            </div>
+
+            <!-- List of Entries -->
+            <div>
+                <h3 class="font-bold text-gray-300 text-sm mb-4 uppercase tracking-wider pl-1 font-serif">Mis Apuntes <span id="journal-total-count" class="text-xs text-catholic-gold ml-2"></span></h3>
+                <div id="journal-list" class="space-y-4 pb-6">
+                    <!-- Javascript injected entries -->
+                </div>
+            </div>
+        </section>
+
+        <!-- =======================
+             PESTAÑA 3: COMUNIDAD
+        ======================== -->
+        <section id="section-comu" class="space-y-6 hidden-section">
+            <div class="flex justify-between items-end">
+                <div>
+                    <h2 class="text-2xl font-bold text-white flex items-center gap-2"><i class="fas fa-users text-green-400"></i> Red de Oración</h2>
+                    <p class="text-xs text-gray-400 mt-1">Oremos los unos por los otros (Santiago 5:16)</p>
+                </div>
+                <button onclick="openModal()" class="bg-catholic-gold text-black px-4 py-2 rounded-xl text-sm font-bold shadow-lg bounce-on-click transition flex items-center gap-2">
+                    <i class="fas fa-plus"></i> Añadir
+                </button>
             </div>
             
-            <!-- Journal Access -->
-            <div class="bg-catholic-card border border-gray-800/80 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md bounce-on-click cursor-pointer">
-                <i class="fas fa-book-open text-blue-400 text-2xl mb-2 filter drop-shadow-md"></i>
-                <h3 class="text-lg font-bold text-white mb-0.5">Mi Diario</h3>
-                <p class="text-xs text-gray-400 font-medium mt-1">5 entradas</p>
-            </div>
-        </div>
+            <div id="community-list" class="space-y-4 pb-6">
+                <!-- Post 1 -->
+                <div class="bg-catholic-card rounded-3xl p-5 border border-gray-800 shadow-lg">
+                    <div class="flex justify-between items-center mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-blue-900 border border-blue-700 flex items-center justify-center text-white font-bold">C</div>
+                            <div>
+                                <h4 class="font-bold text-white text-sm">Hermano Carlos</h4>
+                                <p class="text-[10px] text-gray-400">Hace 2 horas</p>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-300 mb-4 leading-relaxed">Pido sus oraciones por la salud de mi madre. Mañana entra a una cirugía delicada del corazón. Que se haga la voluntad de Dios, pero que nos dé fortaleza a toda la familia.</p>
+                    <div class="flex gap-6 border-t border-gray-800 pt-3">
+                        <button class="text-xs font-medium text-gray-400 hover:text-catholic-gold flex items-center gap-1.5 transition bounce-on-click" onclick="incrementCommunityCounter(this)">
+                            <i class="fas fa-hands-praying text-sm"></i> <span class="count text-white">24</span> Orar
+                        </button>
+                        <button class="text-xs font-medium text-gray-400 hover:text-red-400 flex items-center gap-1.5 transition bounce-on-click" onclick="incrementCommunityCounter(this)">
+                            <i class="fas fa-heart text-sm"></i> <span class="count text-white">12</span> Amén
+                        </button>
+                    </div>
+                </div>
 
-        <!-- Lectio Divina Section -->
-        <div class="pt-2">
-            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <i class="fas fa-dove text-catholic-gold"></i> Lectio Divina Asistida
-            </h3>
-            
-            <div class="space-y-3">
-                <!-- Lectio -->
-                <div class="bg-catholic-card rounded-2xl p-4 border border-gray-800/60 border-l-4 border-l-blue-400 shadow-sm cursor-pointer hover:bg-catholic-highlight transition">
-                    <h4 class="font-bold text-blue-300 mb-1 text-sm">1. Lectio (Lectura)</h4>
-                    <p class="text-xs text-gray-300">¿Qué dice el texto bíblico en sí mismo?</p>
-                </div>
-                
-                <!-- Meditatio -->
-                <div class="bg-catholic-card rounded-2xl p-4 border border-gray-800/60 border-l-4 border-l-purple-400 shadow-sm cursor-pointer hover:bg-catholic-highlight transition">
-                    <h4 class="font-bold text-purple-300 mb-1 text-sm">2. Meditatio (Meditación)</h4>
-                    <p class="text-xs text-gray-300">¿Qué me dice a mí este texto hoy?</p>
-                </div>
-                
-                <!-- Oratio -->
-                <div class="bg-catholic-card rounded-2xl p-4 border border-gray-800/60 border-l-4 border-l-green-400 shadow-sm cursor-pointer hover:bg-catholic-highlight transition">
-                    <h4 class="font-bold text-green-300 mb-1 text-sm">3. Oratio (Oración)</h4>
-                    <p class="text-xs text-gray-300">¿Qué le digo al Señor motivado por su Palabra?</p>
-                </div>
-                
-                <!-- Contemplatio -->
-                <div class="bg-catholic-card rounded-2xl p-4 border border-gray-800/60 border-l-4 border-l-catholic-gold shadow-sm cursor-pointer hover:bg-catholic-highlight transition">
-                    <h4 class="font-bold text-catholic-gold mb-1 text-sm">4. Contemplatio (Contemplación)</h4>
-                    <p class="text-xs text-gray-300">¿Qué conversión de vida me pide Dios?</p>
+                <!-- Post 2 -->
+                <div class="bg-catholic-card rounded-3xl p-5 border border-gray-800 shadow-lg">
+                    <div class="flex justify-between items-center mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-purple-900 border border-purple-700 flex items-center justify-center text-white font-bold">E</div>
+                            <div>
+                                <h4 class="font-bold text-white text-sm">Elena Gómez</h4>
+                                <p class="text-[10px] text-gray-400">Hace 5 horas</p>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-300 mb-4 leading-relaxed">¡Agradezco a Dios porque mi hijo consiguió el trabajo que tanto necesitaba después de meses de búsqueda! El Rosario nunca decepciona.</p>
+                    <div class="flex gap-6 border-t border-gray-800 pt-3">
+                        <button class="text-xs font-medium text-gray-400 hover:text-catholic-gold flex items-center gap-1.5 transition bounce-on-click" onclick="incrementCommunityCounter(this)">
+                            <i class="fas fa-hands-praying text-sm"></i> <span class="count text-white">18</span> Orar
+                        </button>
+                        <button class="text-xs font-medium text-gray-400 hover:text-red-400 flex items-center gap-1.5 transition bounce-on-click" onclick="incrementCommunityCounter(this)">
+                            <i class="fas fa-heart text-sm"></i> <span class="count text-white">45</span> Amén
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
+        </section>
+
+        <!-- =======================
+             PESTAÑA 4: PAZ
+        ======================== -->
+        <section id="section-paz" class="space-y-6 hidden-section pb-10">
+            <div class="text-center mt-6 mb-8">
+                <div class="w-20 h-20 bg-catholic-gold/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-catholic-gold/30">
+                    <i class="fas fa-dove text-4xl text-catholic-gold"></i>
+                </div>
+                <h2 class="text-2xl font-serif font-bold text-white">Rincón de Paz</h2>
+                <p class="text-gray-400 text-sm mt-1">Generador de Oraciones Personalizadas</p>
+            </div>
+
+            <div class="bg-gradient-to-b from-catholic-highlight to-catholic-card border border-gray-700/50 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                <h3 class="text-sm font-bold text-white text-center mb-4 uppercase tracking-widest">¿Qué anhela tu corazón hoy?</h3>
+                
+                <div class="flex flex-wrap justify-center gap-3 mb-8" id="prayer-tags">
+                    <span class="chip text-sm active" onclick="selectPrayerTag(this)">Paz</span>
+                    <span class="chip text-sm" onclick="selectPrayerTag(this)">Fortaleza</span>
+                    <span class="chip text-sm" onclick="selectPrayerTag(this)">Gratitud</span>
+                    <span class="chip text-sm" onclick="selectPrayerTag(this)">Sanación</span>
+                    <span class="chip text-sm" onclick="selectPrayerTag(this)">Familia</span>
+                </div>
+                
+                <button id="btn-generate-prayer" onclick="generatePrayer()" class="w-full py-4 bg-catholic-gold text-black rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-yellow-400 shadow-xl bounce-on-click transition-colors">
+                    <i class="fas fa-pray"></i> Inspirar Oración con IA
+                </button>
+
+                <div id="prayer-result" class="mt-6 p-6 bg-catholic-base rounded-2xl border border-catholic-gold/20 shadow-inner hidden">
+                    <div id="prayer-loader" class="flex flex-col items-center justify-center py-6 hidden space-y-3">
+                        <i class="fas fa-circle-notch fa-spin text-catholic-gold text-3xl"></i>
+                        <p class="text-sm text-catholic-gold font-medium animate-pulse">Tejiendo palabras hacia Dios...</p>
+                    </div>
+                    <div id="prayer-text" class="text-center text-white italic font-serif leading-relaxed text-base hidden">
+                    </div>
+                </div>
+            </div>
+        </section>
         
     </main>
 
     <!-- Bottom Navigation Bar -->
-    <nav class="bg-catholic-base border-t border-gray-800/80 fixed bottom-0 w-full px-6 py-4 flex justify-between items-center pb-safe shadow-[0_-10px_20px_rgba(0,0,0,0.3)]">
-        <button class="nav-item active flex flex-col items-center gap-1.5 w-16 bounce-on-click">
+    <nav class="bg-catholic-base border-t border-gray-800/80 fixed bottom-0 w-full px-6 py-3 flex justify-between items-center pb-5 shadow-[0_-20px_30px_rgba(3,26,51,0.9)] z-30">
+        <button class="nav-item active flex flex-col items-center gap-1.5 w-16 bounce-on-click" onclick="switchTab('hoy', this)">
             <i class="fas fa-home text-xl"></i>
             <span class="text-[10px] font-bold tracking-wide">Hoy</span>
         </button>
-        <button class="nav-item flex flex-col items-center gap-1.5 w-16 bounce-on-click">
-            <i class="fas fa-book text-xl"></i>
+        <button class="nav-item flex flex-col items-center gap-1.5 w-16 bounce-on-click" onclick="switchTab('diario', this)">
+            <i class="fas fa-book-open text-xl"></i>
             <span class="text-[10px] font-bold tracking-wide">Diario</span>
         </button>
-        <button class="nav-item flex flex-col items-center gap-1.5 w-16 bounce-on-click">
+        <button class="nav-item flex flex-col items-center gap-1.5 w-16 bounce-on-click" onclick="switchTab('comu', this)">
             <i class="fas fa-users text-xl"></i>
             <span class="text-[10px] font-bold tracking-wide">Comu</span>
         </button>
-        <button class="nav-item flex flex-col items-center gap-1.5 w-16 bounce-on-click">
+        <button class="nav-item flex flex-col items-center gap-1.5 w-16 bounce-on-click" onclick="switchTab('paz', this)">
             <i class="fas fa-pray text-xl"></i>
             <span class="text-[10px] font-bold tracking-wide">Paz</span>
         </button>
     </nav>
 
+    <!-- Modal for adding intention -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black/80 z-50 items-center justify-center p-5 backdrop-blur-sm transition-opacity opacity-0 pointer-events-none">
+        <div class="bg-catholic-base w-full max-w-sm rounded-[2rem] p-6 shadow-2xl scale-95 transition-transform duration-300 border border-gray-700/80" id="modal-content">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-white font-bold text-lg flex items-center gap-2"><i class="fas fa-pen-nib text-catholic-gold"></i> Escribir Intención</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-white bg-gray-800 rounded-full w-8 h-8 flex items-center justify-center transition"><i class="fas fa-times"></i></button>
+            </div>
+            <textarea id="intention-input" rows="5" placeholder="¿Por qué te gustaría que oremos hoy la comunidad?" class="w-full bg-catholic-card border border-gray-700 rounded-2xl p-4 text-white text-sm mb-5 focus:outline-none focus:border-catholic-gold focus:ring-1 focus:ring-catholic-gold transition resize-none"></textarea>
+            <button onclick="postIntention()" class="w-full py-4 bg-catholic-gold text-black rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-yellow-400 bounce-on-click transition shadow-lg">
+                <i class="fas fa-paper-plane"></i> Publicar en Comunidad
+            </button>
+        </div>
+    </div>
+
+
     <script>
-        // -------------------------------------------------------------
-        // LOGIC FOR SIMULATION & PWA
-        // -------------------------------------------------------------
-
-        // 1. Navigation Highlighting
-        const navItems = document.querySelectorAll('.nav-item');
-        navItems.forEach(item => {
-            item.addEventListener('click', () => {
-                navItems.forEach(nav => nav.classList.remove('active'));
-                item.classList.add('active');
-            });
-        });
-
-        // 2. Banner Logic
-        const banner = document.getElementById('pwa-banner');
-        const closeBanner = document.getElementById('close-banner');
-        closeBanner.addEventListener('click', () => {
-            banner.style.display = 'none';
-        });
-
-        // 3. Environment Variables (Netlify/Vite PWA Ready)
-        // Ensure you never hardcode the key in production
-        // In Vite: import.meta.env.VITE_GEMINI_API_KEY
-        // In Next.js: process.env.NEXT_PUBLIC_GEMINI_API_KEY
-        // Here we simulate the config to keep code prepared.
+        // ==========================================
+        //         A. SYSTEM & PWAs config 
+        // ==========================================
         
+        // ENV Key simulator for Vite/Next.js Netlify Injection compatibility
         function getGeminiApiKey() {
-            // Netlify injected variable check (simulation)
             let apiKey = '';
-            
-            // Example Next configuration structure check:
             if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
                 apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-            } 
-            // Example Vite configuration structure check:
-            else if (typeof import_meta !== 'undefined' && import_meta.env && import_meta.env.VITE_GEMINI_API_KEY) {
+            } else if (typeof import_meta !== 'undefined' && import_meta.env && import_meta.env.VITE_GEMINI_API_KEY) {
                 apiKey = import_meta.env.VITE_GEMINI_API_KEY;
             }
-            
             return apiKey;
         }
 
-        // 4. Simulate Action
-        async function meditateWithAI() {
-            const key = getGeminiApiKey();
-            if (!key || key === '') {
-                alert("Simulación IA: Inyecta tu API_KEY a través de las variables de entorno de Netlify (e.g. VITE_GEMINI_API_KEY) para habilitar esta función en producción.");
+        // ==========================================
+        //            B. GLOBAL STATE
+        // ==========================================
+        
+        // Load data from LocalStorage
+        let journalEntries = JSON.parse(localStorage.getItem('journalEntries')) || [];
+        let currentStreak = parseInt(localStorage.getItem('streak')) || 12;
+        
+        // Temporary Form states
+        let selectedMood = 'Paz';
+        let currentStars = 0;
+        let selectedPrayerTag = 'Paz';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateJournalUI();
+            
+            // PWA banner dismissal
+            const closeBtn = document.getElementById('close-banner');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    document.getElementById('pwa-banner').style.display = 'none';
+                });
+            }
+        });
+
+        // ==========================================
+        //         1. NAVIGATION TAB LOGIC
+        // ==========================================
+        function switchTab(tabId, element = null) {
+            const tabs = ['hoy', 'diario', 'comu', 'paz'];
+            
+            // Hide all sections
+            tabs.forEach(id => {
+                const section = document.getElementById(`section-${id}`);
+                if(section) section.classList.add('hidden-section');
+            });
+            
+            // Show requested section
+            const target = document.getElementById(`section-${tabId}`);
+            if(target) target.classList.remove('hidden-section');
+            
+            // Scroll to top
+            document.getElementById('main-container').scrollTop = 0;
+
+            // Change Header details
+            const subtitle = document.getElementById('header-subtitle');
+            if(tabId === 'hoy') subtitle.innerText = "Domingo, tiempo ordinario";
+            else if(tabId === 'diario') subtitle.innerText = "Reflexión Continua";
+            else if(tabId === 'comu') subtitle.innerText = "Comunidad de Orantes";
+            else if(tabId === 'paz') subtitle.innerText = "Sanación Interior";
+
+            // Update Nav Icons colors
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(nav => nav.classList.remove('active'));
+            
+            if(element) {
+                element.classList.add('active');
             } else {
-                alert("Llamando a Gemini API con clave protegida...");
+                // Determine programmatic index mapping if accessed via a card rather than bottom nav
+                const mapping = { 'hoy': 0, 'diario': 1, 'comu': 2, 'paz': 3 };
+                if(mapping[tabId] !== undefined && navItems[mapping[tabId]]) {
+                    navItems[mapping[tabId]].classList.add('active');
+                }
             }
         }
+
+        // ==========================================
+        //         2. LECTIO DIVINA (HOY)
+        // ==========================================
+        function toggleLectio(cardElement) {
+            const content = cardElement.querySelector('.lectio-content');
+            const icon = cardElement.querySelector('i.fa-chevron-down');
+            const isOpen = content.classList.contains('open');
+
+            // Close all contents first
+            document.querySelectorAll('.lectio-content').forEach(el => el.classList.remove('open'));
+            document.querySelectorAll('.step-card i.fa-chevron-down').forEach(el => el.style.transform = 'rotate(0deg)');
+
+            // Open targeted one if it was closed
+            if(!isOpen) {
+                content.classList.add('open');
+                icon.style.transform = 'rotate(180deg)';
+            }
+        }
+
+        function meditateWithAI() {
+            const key = getGeminiApiKey();
+            if(!key || key === '') {
+                alert("Simulación de IA Activa: Re-escribiendo y expandiendo la lectura basada en Mateo 8:23-27... (Para habilitar en producción inyecte el API key en las variables de entorno de Netlify).");
+            }
+        }
+
+        // ==========================================
+        //         3. DIARY LOGIC (DIARIO)
+        // ==========================================
+        
+        // Selection of Mood Chips
+        function selectMood(el) {
+            document.querySelectorAll('#mood-chips .chip').forEach(c => c.classList.remove('active'));
+            el.classList.add('active');
+            selectedMood = el.innerText.trim();
+        }
+
+        // Star rating
+        function setStar(count) {
+            currentStars = count;
+            const stars = document.querySelectorAll('#star-rating i');
+            stars.forEach((star, index) => {
+                if(index < count) {
+                    star.classList.replace('text-gray-600', 'text-catholic-gold');
+                } else {
+                    star.classList.replace('text-catholic-gold', 'text-gray-600');
+                }
+            });
+        }
+
+        // Add to array & local storage
+        function saveJournalEntry() {
+            const titleInput = document.getElementById('journal-title');
+            const contentInput = document.getElementById('journal-content');
+            const title = titleInput.value.trim();
+            const content = contentInput.value.trim();
+
+            if(!title || !content) {
+                alert('Hermano, por favor proporciona un título y relata tu reflexión antes de guardarla.');
+                return;
+            }
+
+            // Beautiful Spanish Date Format
+            const today = new Date();
+            const dateStr = today.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+
+            const newEntry = {
+                title, 
+                content, 
+                mood: selectedMood, 
+                stars: currentStars, 
+                date: dateStr
+            };
+
+            journalEntries.unshift(newEntry); // Prepend
+            localStorage.setItem('journalEntries', JSON.stringify(journalEntries));
+            
+            // Streak +1 
+            currentStreak += 1;
+            localStorage.setItem('streak', currentStreak);
+
+            // Clean form
+            titleInput.value = '';
+            contentInput.value = '';
+            setStar(0);
+
+            // Refresh DOM
+            updateJournalUI();
+        }
+
+        // Refresh List and Dashboard Counters
+        function updateJournalUI() {
+            // Update Dashboard tags
+            const journalCountText = `${journalEntries.length} entradas`;
+            document.getElementById('journal-count-hoy').innerText = journalCountText;
+            document.getElementById('journal-total-count').innerText = `(${journalEntries.length})`;
+            document.getElementById('streak-counter').innerText = currentStreak;
+
+            const list = document.getElementById('journal-list');
+            list.innerHTML = '';
+
+            if (journalEntries.length === 0) {
+                list.innerHTML = `<div class="text-center py-10 bg-catholic-base rounded-2xl border border-gray-800"><i class="fas fa-feather text-gray-600 text-3xl mb-3"></i><p class="text-sm text-gray-400 font-serif italic">Tu diario espiritual aguarda tu primera reflexión.</p></div>`;
+                return;
+            }
+
+            journalEntries.forEach(entry => {
+                const starsHTML = Array(5).fill(0).map((_, i) => 
+                    `<i class="fas fa-star text-[10px] ${i < entry.stars ? 'text-catholic-gold' : 'text-gray-700/50'}"></i>`
+                ).join('');
+
+                const html = `
+                <div class="bg-gradient-to-br from-catholic-card to-catholic-base rounded-3xl p-5 border border-gray-700/60 shadow-md">
+                    <div class="flex justify-between items-start mb-3">
+                        <h4 class="font-bold text-white pr-2">${entry.title}</h4>
+                        <span class="text-[10px] text-gray-400 bg-gray-800/80 px-2.5 py-1 rounded-full whitespace-nowrap">${entry.date}</span>
+                    </div>
+                    <p class="text-sm text-gray-300 mb-4 leading-relaxed font-serif">${entry.content}</p>
+                    <div class="flex justify-between items-center border-t border-gray-700/60 pt-3">
+                        <span class="text-[10px] text-catholic-gold font-bold uppercase tracking-wider bg-catholic-gold/10 px-2.5 py-1 rounded-md">${entry.mood}</span>
+                        <div class="flex gap-1 bg-gray-800/50 px-2 py-1 rounded-full">${starsHTML}</div>
+                    </div>
+                </div>`;
+                list.insertAdjacentHTML('beforeend', html);
+            });
+        }
+
+        // ==========================================
+        //         4. COMMUNITY LOGIC (COMU)
+        // ==========================================
+        
+        function incrementCommunityCounter(btn) {
+            // Find span with count class inside to increment
+            const span = btn.querySelector('.count');
+            let val = parseInt(span.innerText);
+            span.innerText = val + 1;
+            
+            // Switch colors dynamically to reflect interaction
+            if(btn.innerHTML.includes('fa-heart')) {
+                btn.classList.add('text-red-400');
+                btn.classList.replace('text-gray-400', 'text-red-400');
+            } else {
+                btn.classList.add('text-catholic-gold');
+                btn.classList.replace('text-gray-400', 'text-catholic-gold');
+            }
+
+            // Small pop animation
+            btn.style.transform = 'scale(1.1)';
+            setTimeout(() => { btn.style.transform = 'scale(1)'; }, 200);
+            
+            // Allow clicking only once
+            btn.onclick = null; 
+        }
+
+        function openModal() {
+            const overlay = document.getElementById('modal-overlay');
+            const content = document.getElementById('modal-content');
+            
+            overlay.classList.remove('pointer-events-none');
+            overlay.classList.replace('opacity-0', 'opacity-100');
+            
+            setTimeout(() => {
+                content.classList.replace('scale-95', 'scale-100');
+                document.getElementById('intention-input').focus();
+            }, 10);
+        }
+
+        function closeModal() {
+            const overlay = document.getElementById('modal-overlay');
+            const content = document.getElementById('modal-content');
+            
+            content.classList.replace('scale-100', 'scale-95');
+            overlay.classList.replace('opacity-100', 'opacity-0');
+            
+            setTimeout(() => {
+                overlay.classList.add('pointer-events-none');
+            }, 300);
+        }
+
+        function postIntention() {
+            const textInput = document.getElementById('intention-input');
+            const text = textInput.value.trim();
+            if(!text) return;
+
+            const list = document.getElementById('community-list');
+            
+            // Create DOM card dynamically
+            const div = document.createElement('div');
+            div.className = 'bg-catholic-card rounded-3xl p-5 border border-catholic-gold/40 shadow-lg transition-all duration-500 opacity-0 scale-95';
+            div.innerHTML = `
+                <div class="flex justify-between items-center mb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-teal-800 border border-teal-600 flex items-center justify-center text-white font-bold">T</div>
+                        <div>
+                            <h4 class="font-bold text-white text-sm">Tú</h4>
+                            <p class="text-[10px] text-catholic-gold">Ahora mismo</p>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-sm text-gray-300 mb-4 leading-relaxed">${text}</p>
+                <div class="flex gap-6 border-t border-gray-800 pt-3">
+                    <button class="text-xs font-medium text-gray-400 hover:text-catholic-gold flex items-center gap-1.5 transition bounce-on-click" onclick="incrementCommunityCounter(this)">
+                        <i class="fas fa-hands-praying text-sm"></i> <span class="count text-white">0</span> Orar
+                    </button>
+                    <button class="text-xs font-medium text-gray-400 hover:text-red-400 flex items-center gap-1.5 transition bounce-on-click" onclick="incrementCommunityCounter(this)">
+                        <i class="fas fa-heart text-sm"></i> <span class="count text-white">0</span> Amén
+                    </button>
+                </div>
+            `;
+            
+            list.prepend(div);
+            closeModal();
+            textInput.value = '';
+
+            // Animate card entrance
+            setTimeout(() => {
+                div.classList.replace('opacity-0', 'opacity-100');
+                div.classList.replace('scale-95', 'scale-100');
+            }, 50);
+        }
+
+        // ==========================================
+        //         5. AI PRAYER LOGIC (PAZ)
+        // ==========================================
+        
+        function selectPrayerTag(el) {
+            document.querySelectorAll('#prayer-tags .chip').forEach(c => c.classList.remove('active'));
+            el.classList.add('active');
+            selectedPrayerTag = el.innerText.trim();
+        }
+
+        function generatePrayer() {
+            const btn = document.getElementById('btn-generate-prayer');
+            const resultBox = document.getElementById('prayer-result');
+            const loader = document.getElementById('prayer-loader');
+            const textEl = document.getElementById('prayer-text');
+
+            // Reset view
+            resultBox.classList.remove('hidden');
+            textEl.classList.add('hidden');
+            loader.classList.remove('hidden');
+            btn.disabled = true;
+            btn.classList.add('opacity-50');
+
+            // Simulate Network Request / AI Generation (1.5 seconds)
+            setTimeout(() => {
+                loader.classList.add('hidden');
+                textEl.classList.remove('hidden');
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
+
+                // Dynamic templating simulation
+                let prayerText = "";
+                switch(selectedPrayerTag) {
+                    case "Paz":
+                        prayerText = `"Señor Jesús, Príncipe de la Paz, aquieta mi mente agitada en este momento. Concede a mi alma el descanso que solo Tú puedes dar, y ayúdame a confiar en que tu gracia sobrenatural sostiene mi barca en medio de las tempestades diarias. Amén."`;
+                        break;
+                    case "Fortaleza":
+                        prayerText = `"Dios todopoderoso, ante mi frágil condición humana te reconozco como mi roca invencible. Dame hoy la valentía de los Santos y renueva mis fuerzas como las del águila, para abrazar mi cruz y caminar sin desfallecer. Amén."`;
+                        break;
+                    case "Gratitud":
+                        prayerText = `"Padre Lleno de Bondad, sé que de Tus manos procede todo don perfecto. Te doy gracias infinitas por el milagro de este nuevo día, por el don de la vida, y por las bendiciones que en tu silencio derramas sobre mi camino. Amén."`;
+                        break;
+                    case "Sanación":
+                        prayerText = `"Médico Divino, pon tu mano sanadora y misericordiosa sobre todas mis heridas y enfermedades, ya sean del cuerpo o del alma. Que el bálsamo de tu amor infinito restaure mi salud y me devuelva la paz para glorificarte. Amén."`;
+                        break;
+                    case "Familia":
+                        prayerText = `"Sagrada Familia de Nazaret, protectora de los hogares. Guarda a mis seres queridos bajo tu manto sagrado. Que en nuestra casa reine siempre el perdón, el diálogo, la unión y el ardiente amor del Corazón de Cristo. Amén."`;
+                        break;
+                    default:
+                        prayerText = `"Padre nuestro, que me escuchas en silencio, acompáñame en mi caminar. Amén."`;
+                }
+
+                textEl.innerText = prayerText;
+                
+                // Add fade-in animation to text dynamically
+                textEl.style.animation = 'none';
+                textEl.offsetHeight; // trigger reflow
+                textEl.style.animation = 'fadeIn 0.5s ease';
+                
+            }, 1500);
+        }
+
     </script>
 </body>
 </html>
