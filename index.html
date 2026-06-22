@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Daily Catholic Meditations</title>
+    <title>Meditación Católica</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <meta name="theme-color" content="#031A33">
@@ -190,7 +190,10 @@
                             </div>
                             <i class="fas fa-chevron-down text-gray-400 text-sm transition-transform duration-300"></i>
                         </div>
-                        <div class="lectio-content">Jesús sube a la barca junto a sus discípulos. En medio del mar, se desata una tempestad violenta mientras Él duerme. Ante el pánico, los apóstoles lo despiertan, y Jesús reprende a los vientos y al mar, devolviendo la calma absoluta.</div>
+                        <div class="lectio-content">
+                            <p class="mb-3">Jesús sube a la barca junto a sus discípulos. En medio del mar, se desata una tempestad violenta mientras Él duerme. Ante el pánico, los apóstoles lo despiertan, y Jesús reprende a los vientos y al mar, devolviendo la calma absoluta.</p>
+                            <button onclick="event.stopPropagation(); nextLectioStep(this)" class="w-full py-2 bg-blue-500/20 text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-500/30 transition flex items-center justify-center gap-2">Siguiente <i class="fas fa-arrow-right"></i></button>
+                        </div>
                     </div>
                     
                     <!-- Meditatio -->
@@ -202,7 +205,10 @@
                             </div>
                             <i class="fas fa-chevron-down text-gray-400 text-sm transition-transform duration-300"></i>
                         </div>
-                        <div class="lectio-content">¿Cuáles son las tempestades que sacuden la barca de mi vida actualmente? A veces siento que Dios "duerme" cuando más lo necesito. Jesús me invita a examinar mi fe y confiar en Su poder silencioso sobre mis problemas.</div>
+                        <div class="lectio-content">
+                            <p class="mb-3">¿Cuáles son las tempestades que sacuden la barca de mi vida actualmente? A veces siento que Dios "duerme" cuando más lo necesito. Jesús me invita a examinar mi fe y confiar en Su poder silencioso sobre mis problemas.</p>
+                            <button onclick="event.stopPropagation(); nextLectioStep(this)" class="w-full py-2 bg-purple-500/20 text-purple-300 rounded-lg text-xs font-bold hover:bg-purple-500/30 transition flex items-center justify-center gap-2">Siguiente <i class="fas fa-arrow-right"></i></button>
+                        </div>
                     </div>
                     
                     <!-- Oratio -->
@@ -214,7 +220,10 @@
                             </div>
                             <i class="fas fa-chevron-down text-gray-400 text-sm transition-transform duration-300"></i>
                         </div>
-                        <div class="lectio-content">"Señor, sálvame porque perezco. Perdona mi poca fe frente a las adversidades. Ayúdame a recordar que siempre estás en mi barca, incluso en el silencio. Confío en que tú tienes la última palabra ante mis deudas, enfermedades y angustias."</div>
+                        <div class="lectio-content">
+                            <p class="mb-3">"Señor, sálvame porque perezco. Perdona mi poca fe frente a las adversidades. Ayúdame a recordar que siempre estás en mi barca, incluso en el silencio. Confío en que tú tienes la última palabra ante mis deudas, enfermedades y angustias."</p>
+                            <button onclick="event.stopPropagation(); nextLectioStep(this)" class="w-full py-2 bg-green-500/20 text-green-300 rounded-lg text-xs font-bold hover:bg-green-500/30 transition flex items-center justify-center gap-2">Siguiente <i class="fas fa-arrow-right"></i></button>
+                        </div>
                     </div>
                     
                     <!-- Contemplatio -->
@@ -226,7 +235,10 @@
                             </div>
                             <i class="fas fa-chevron-down text-gray-400 text-sm transition-transform duration-300"></i>
                         </div>
-                        <div class="lectio-content">Viviré el día de hoy sin pánico ante los imprevistos. Me comprometo a responder con paciencia y oración profunda la próxima vez que enfrente una situación estresante. Que mi alma descanse en Cristo.</div>
+                        <div class="lectio-content">
+                            <p class="mb-3">Viviré el día de hoy sin pánico ante los imprevistos. Me comprometo a responder con paciencia y oración profunda la próxima vez que enfrente una situación estresante. Que mi alma descanse en Cristo.</p>
+                            <button onclick="event.stopPropagation(); nextLectioStep(this)" class="w-full py-2 bg-catholic-gold/20 text-catholic-gold rounded-lg text-xs font-bold hover:bg-catholic-gold/30 transition flex items-center justify-center gap-2">Finalizar <i class="fas fa-check"></i></button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -517,6 +529,18 @@
             if(!isOpen) {
                 content.classList.add('open');
                 icon.style.transform = 'rotate(180deg)';
+            }
+        }
+
+        function nextLectioStep(btnElement) {
+            const currentCard = btnElement.closest('.step-card');
+            const nextCard = currentCard.nextElementSibling;
+            if (nextCard && nextCard.classList.contains('step-card')) {
+                toggleLectio(nextCard);
+            } else {
+                // If it's the last step ("Finalizar"), close everything
+                document.querySelectorAll('.lectio-content').forEach(el => el.classList.remove('open'));
+                document.querySelectorAll('.step-card i.fa-chevron-down').forEach(el => el.style.transform = 'rotate(0deg)');
             }
         }
 

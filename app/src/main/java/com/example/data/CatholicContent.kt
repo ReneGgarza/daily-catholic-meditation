@@ -30,22 +30,22 @@ object CatholicContent {
         ),
         ScriptureVerse(
             reference = "Mateo 11:28",
-            text = "Venid a mí todos los que estáis trabajados y cargados, y yo os haré descansar.",
+            text = "Vengan a mí todos los que están cansados y agobiados, y yo los haré descansar.",
             context = "Jesús nos invita a entregar nuestras cargas. En la comunión con Él, el alma fatigada encuentra verdadero consuelo y descanso."
         ),
         ScriptureVerse(
             reference = "Filipenses 4:6-7",
-            text = "Por nada estéis afanosos, sino sean conocidas vuestras peticiones delante de Dios en toda oración y ruego, con acción de gracias. Y la paz de Dios, que sobrepasa todo entendimiento, guardará vuestros corazones y vuestros pensamientos en Cristo Jesús.",
+            text = "No se inquieten por nada; más bien, en toda ocasión, con oración y ruego, presenten sus peticiones a Dios y denle gracias. Y la paz de Dios, que sobrepasa todo entendimiento, cuidará sus corazones y sus pensamientos en Cristo Jesús.",
             context = "San Pablo nos enseña a trocar la angustia humana por la súplica agradecida. La paz divina custodia la mente y el corazón."
         ),
         ScriptureVerse(
             reference = "Salmo 23:1-3",
-            text = "Jehová es mi pastor; nada me faltará. En lugares de delicados pastos me hará descansar; junto a aguas de reposo me pastoreará. Confortará mi alma.",
+            text = "El Señor es mi pastor, nada me falta. En verdes pastos me hace descansar; a las aguas tranquilas me conduce. Me da nuevas fuerzas.",
             context = "El Pastor Divino. Una de las expresiones más conmovedoras de confianza absoluta y seguridad en la divina providencia."
         ),
         ScriptureVerse(
             reference = "Juan 14:27",
-            text = "La paz os dejo, mi paz os doy; yo no os la doy como el mundo la da. No se turbe vuestro corazón, ni tenga miedo.",
+            text = "La paz les dejo, mi paz les doy; yo no se la doy a ustedes como la da el mundo. No se angustien ni se acobarden.",
             context = "Jesús otorga una paz espiritual interior, imperturbable ante los vaivenes políticos, económicos o tribulaciones terrenales."
         )
     )
@@ -73,7 +73,7 @@ object CatholicContent {
         ),
         ClassicPrayer(
             title = "Oración de Confianza (San Ignacio)",
-            text = "Tomad, Señor, y recibid\ntoda mi libertad, mi memoria,\nmi entendimiento y toda mi voluntad,\ntodo mi haber y mi poseer.\nVos me lo disteis, a Vos, Señor, lo torno.\nTodo es vuestro, disponed de ello\na toda vuestra voluntad.\nDadme vuestro amor y gracia, que esto me basta. Amén.",
+            text = "Toma, Señor, y recibe\ntoda mi libertad, mi memoria,\nmi entendimiento y toda mi voluntad,\ntodo mi haber y mi poseer.\nTú me lo diste, a ti, Señor, lo devuelvo.\nTodo es tuyo, dispón de ello\nsegún tu voluntad.\nDame tu amor y tu gracia, que esto me basta. Amén.",
             category = "Gratitud"
         )
     )

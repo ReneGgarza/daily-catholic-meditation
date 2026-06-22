@@ -242,7 +242,7 @@ fun MainAppScreen(viewModel: MainViewModel = viewModel()) {
                             letterSpacing = 1.sp
                         )
                         Text(
-                            text = "Catholic Meditations",
+                            text = "Meditación Católica",
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -3256,7 +3256,7 @@ fun LandingPageScreen(onDismiss: () -> Unit) {
 
                     // App Title & Subtitle Branding Title
                     Text(
-                        text = "Daily Catholic Meditations",
+                        text = "Meditación Católica",
                         fontSize = 32.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color.White,
@@ -3458,8 +3458,8 @@ fun LandingPageScreen(onDismiss: () -> Unit) {
                                     onClick = {
                                         shareText(
                                             context = context,
-                                            header = "Daily Catholic Meditations - Descarga APK",
-                                            text = "Instala la app completa de Meditaciones Católicas Diarias, Lectio Divina asistida por IA y Diario Espiritual. Descarga el APK oficial aquí: $downloadUrl"
+                                            header = "Meditación Católica - Descarga APK",
+                                            text = "Instala la app completa de Meditación Católica, Lectio Divina asistida por IA y Diario Espiritual. Descarga el APK oficial aquí: $downloadUrl"
                                         )
                                     },
                                     border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
@@ -3615,7 +3615,7 @@ fun LandingPageScreen(onDismiss: () -> Unit) {
 
                     // Professional Landing Footer
                     Text(
-                        text = "Daily Catholic Meditations v1.0.0 (API 24+)\nDesarrollado en AI Studio Build • 2026",
+                        text = "Meditación Católica v1.0.0 (API 24+)\nDesarrollado en AI Studio Build • 2026",
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center,
                         color = Color.White.copy(alpha = 0.4f),
